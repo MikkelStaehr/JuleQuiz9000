@@ -210,7 +210,14 @@ function TeamScreen({ session, onLeave }: { session: Session; onLeave: () => voi
       {!state ? (
         <Center>Forbinder til spillet…</Center>
       ) : state.phase === "question" || state.phase === "countdown" || state.phase === "locked" ? (
-        <AnswerArea key={state.question_key} state={state} session={session} color={color} answered={answers.some((a) => a.team_id === session.teamId)} />
+        <AnswerArea
+          key={state.question_key}
+          state={state}
+          session={session}
+          color={color}
+          answered={answers.some((a) => a.team_id === session.teamId)}
+          lockedOnServer={!!answers.find((a) => a.team_id === session.teamId)?.locked_at}
+        />
       ) : state.phase === "reveal" ? (
         <Center>
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-gold">Facit</p>
@@ -256,7 +263,19 @@ function readLocal(key: string): { value: unknown; wager: number | null } {
 }
 
 /** One question: renders the type's PlayInput; saves answers (debounced, last value wins) or uploads the drawing at lock. */
-function AnswerArea({ state, session, color, answered }: { state: GameState; session: Session; color: string; answered: boolean }) {
+function AnswerArea({
+  state,
+  session,
+  color,
+  answered,
+  lockedOnServer,
+}: {
+  state: GameState;
+  session: Session;
+  color: string;
+  answered: boolean;
+  lockedOnServer: boolean;
+}) {
   const q = publicQuestion(state);
   const ui = REGISTRY[q.answerType];
   const storeKey = answerKey(session.teamId, q.key);
@@ -279,7 +298,17 @@ function AnswerArea({ state, session, color, answered }: { state: GameState; ses
     return () => clearTimeout(id);
   }, [state.phase, state.timer_ends_at]);
   const timeUp = state.phase === "locked" || (state.phase === "countdown" && expired);
-  const disabled = state.phase !== "countdown" || timeUp;
+  // "Lås svar": the team froze its answer before the timer ran out
+  const [lockedLocal, setLockedLocal] = useState(() => {
+    try {
+      return localStorage.getItem(`${storeKey}:locked`) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const locked = lockedLocal || lockedOnServer;
+  const [locking, setLocking] = useState(false);
+  const disabled = state.phase !== "countdown" || timeUp || locked || locking;
 
   const save = useCallback(async () => {
     const { value, wager } = latest.current;
@@ -310,12 +339,13 @@ function AnswerArea({ state, session, color, answered }: { state: GameState; ses
   };
 
   /** draw: export the canvas → upload the PNG → register the answer. */
-  const uploadDrawing = useCallback(async () => {
+  const uploadDrawing = useCallback(async (lock = false): Promise<boolean> => {
     const c = canvas.current;
-    if (!c) return;
+    if (!c) return false;
     if (!c.isDirty()) {
-      setStatus("empty");
-      return;
+      if (lock) setError("Tegn noget først");
+      else setStatus("empty");
+      return false;
     }
     setStatus("saving");
     const sb = getSupabase();
@@ -331,16 +361,17 @@ function AnswerArea({ state, session, color, answered }: { state: GameState; ses
           last = upErr.message;
           continue;
         }
-        const { error: err } = await sb.rpc("submit_answer", { p_team: session.teamId, p_value: { path }, p_wager: null });
+        const { error: err } = await sb.rpc(lock ? "lock_answer" : "submit_answer", { p_team: session.teamId, p_value: { path }, p_wager: null });
         if (err) {
-          last = err.message;
+          last = lockError(err.message);
+          if (/låst/i.test(err.message)) break; // already locked – don't retry
           continue;
         }
         setStatus("saved");
         try {
           localStorage.removeItem("xmasquiz-canvas");
         } catch {}
-        return;
+        return true;
       }
       setStatus("error");
       setError(last);
@@ -348,25 +379,65 @@ function AnswerArea({ state, session, color, answered }: { state: GameState; ses
       setStatus("error");
       setError(e instanceof Error ? e.message : String(e));
     }
+    return false;
   }, [q.key, session.gameId, session.teamId]);
+
+  /** "Lås svar": save the final answer and freeze it (drawings are handed in right away). */
+  const lockAnswer = async () => {
+    setLocking(true);
+    setError(null);
+    try {
+      let ok = false;
+      if (ui.submitOnLock) ok = await uploadDrawing(true);
+      else {
+        if (debounce.current) clearTimeout(debounce.current);
+        const { value, wager } = latest.current;
+        if (value === null || value === undefined) {
+          setError("Vælg et svar først");
+        } else {
+          setStatus("saving");
+          const { error: err } = await getSupabase().rpc("lock_answer", { p_team: session.teamId, p_value: value, p_wager: wager });
+          if (err) {
+            setStatus("error");
+            setError(lockError(err.message));
+          } else {
+            dirty.current = false;
+            setStatus("saved");
+            ok = true;
+          }
+        }
+      }
+      if (ok) {
+        setLockedLocal(true);
+        try {
+          localStorage.setItem(`${storeKey}:locked`, "1");
+        } catch {}
+      }
+    } finally {
+      setLocking(false);
+    }
+  };
 
   // at lock: flush the last value / upload the drawing (once)
   useEffect(() => {
     if (!timeUp || finished.current) return;
     finished.current = true;
+    if (locked) return; // already handed in
     if (debounce.current) clearTimeout(debounce.current);
     const id = setTimeout(() => {
       if (ui.submitOnLock) uploadDrawing();
       else if (dirty.current) save();
     }, 0);
     return () => clearTimeout(id);
-  }, [timeUp, ui.submitOnLock, uploadDrawing, save]);
+  }, [timeUp, locked, ui.submitOnLock, uploadDrawing, save]);
 
   const Input = ui.PlayInput;
   const banner =
     state.phase === "question"
       ? "Klar… I kan svare, når timeren starter"
-      : timeUp
+      : locked
+        ? "Låst 🔒 – venter på de andre"
+        : timeUp
         ? status === "saving"
           ? ui.submitOnLock
             ? "Sender tegningen…"
@@ -406,10 +477,12 @@ function AnswerArea({ state, session, color, answered }: { state: GameState; ses
         {status === "error" ? (
           <>
             <span className="text-[#ffb4b6]">{error}</span>
-            <button className="btn btn-ghost" onClick={() => (ui.submitOnLock ? uploadDrawing() : save())}>
+            <button className="btn btn-ghost" onClick={() => (ui.submitOnLock ? uploadDrawing() : save())} disabled={locked}>
               Prøv igen
             </button>
           </>
+        ) : locked && !timeUp ? (
+          <span className="font-semibold text-gold">Jeres svar er låst 🔒</span>
         ) : !timeUp && state.phase === "countdown" ? (
           ui.submitOnLock ? (
             <span className="text-cream/50">Tegningen afleveres automatisk, når tiden er gået</span>
@@ -422,7 +495,38 @@ function AnswerArea({ state, session, color, answered }: { state: GameState; ses
           )
         ) : null}
       </div>
+      {state.phase === "countdown" && !timeUp && !locked && (ui.submitOnLock || local.value !== null) && (
+        <LockButton busy={locking} onLock={lockAnswer} drawing={!!ui.submitOnLock} />
+      )}
     </div>
+  );
+}
+
+function lockError(msg: string) {
+  if (/lock_answer|function|schema cache/i.test(msg)) return "Låsning er ikke slået til endnu (databasen mangler en opdatering)";
+  return msg;
+}
+
+/** Two-tap lock: first tap arms (3 s), second tap locks for good. */
+function LockButton({ busy, onLock, drawing }: { busy: boolean; onLock: () => void; drawing: boolean }) {
+  const [armed, setArmed] = useState(false);
+  useEffect(() => {
+    if (!armed) return;
+    const id = setTimeout(() => setArmed(false), 3000);
+    return () => clearTimeout(id);
+  }, [armed]);
+  return (
+    <button
+      className={`btn h-14 shrink-0 text-lg ${armed ? "btn-danger bg-alarm/20" : "btn-gold"}`}
+      disabled={busy}
+      onClick={() => {
+        if (!armed) return setArmed(true);
+        setArmed(false);
+        onLock();
+      }}
+    >
+      {busy ? (drawing ? "Afleverer…" : "Låser…") : armed ? "Tryk igen for at låse – kan ikke fortrydes" : drawing ? "Aflevér og lås tegningen 🔒" : "Lås svar 🔒"}
+    </button>
   );
 }
 

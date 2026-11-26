@@ -63,6 +63,8 @@ export interface AnswerStatus {
   team_id: string;
   question_key: string;
   submitted_at: string;
+  /** Set when the team pressed "Lås svar" (migration answer_lock). */
+  locked_at?: string | null;
 }
 
 /** Full answer (revealed_answers() after reveal, or server-side for the quizmaster). */

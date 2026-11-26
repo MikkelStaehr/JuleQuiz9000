@@ -60,15 +60,20 @@ export function AdminPanel({ quiz, initialGame, teamCodes }: { quiz: Question[];
   // ── live answer values (server-side read; clients can't see them) ──
   const [live, setLive] = useState<{ key: string; rows: AnswerValue[] }>({ key: "", rows: [] });
   const answersSig = answers.map((a) => `${a.team_id}@${a.submitted_at}`).join("|");
-  const loadLive = useCallback(async () => {
-    if (!gameId) return;
-    const r = await A.getLiveAnswers(gameId);
-    if (r.ok) setLive({ key: qKey, rows: r.data ?? [] });
-  }, [gameId, qKey]);
+  const [liveTick, setLiveTick] = useState(0);
+  const loadLive = () => setLiveTick((n) => n + 1);
   useEffect(() => {
-    const id = setTimeout(loadLive, 0);
-    return () => clearTimeout(id);
-  }, [loadLive, answersSig, phase, state?.updated_at]);
+    if (!gameId) return;
+    let cancelled = false;
+    const id = setTimeout(async () => {
+      const r = await A.getLiveAnswers(gameId);
+      if (!cancelled && r.ok) setLive({ key: qKey, rows: r.data ?? [] });
+    }, 0);
+    return () => {
+      cancelled = true;
+      clearTimeout(id);
+    };
+  }, [gameId, qKey, answersSig, phase, state?.updated_at, liveTick]);
   const liveRows = live.key === qKey ? live.rows : [];
 
   // ── auto-lock when the timer runs out ──
@@ -157,6 +162,8 @@ export function AdminPanel({ quiz, initialGame, teamCodes }: { quiz: Question[];
   if (!game) return <Setup act={act} pending={pending} error={error} />;
 
   const answeredIds = new Set(answers.map((a) => a.team_id));
+  const lockedIds = new Set(answers.filter((a) => a.locked_at).map((a) => a.team_id));
+  const allLocked = phase === "countdown" && joined.length > 0 && joined.every((t) => lockedIds.has(t.id));
   // draw/closest: drawings that still need a read value (or "ugyldig") before the ranking is complete
   const unread =
     q?.answerType === "draw" && q.scoring === "closest" && phase === "locked"
@@ -288,6 +295,11 @@ export function AdminPanel({ quiz, initialGame, teamCodes }: { quiz: Question[];
               {moreSteps ? `Næste trin (${step + 1}/${steps})` : "Næste"}
             </button>
             <button className={btn("board")} disabled={pending || !can.board} onClick={() => act(() => A.showScoreboard(game.id))}>Scoreboard</button>
+            {allLocked && (
+              <p className="col-span-full animate-pop rounded-lg bg-gold/15 px-3 py-2 text-sm text-gold">
+                Alle hold har låst deres svar 🔒 – tryk “Lås nu” for at gå videre
+              </p>
+            )}
             <label className="col-span-full flex cursor-pointer items-center gap-3 border-t border-gold/15 pt-4 text-sm">
               <input type="checkbox" className="h-4 w-4 accent-[#d9b97a]" checked={autoReveal} onChange={(e) => toggleAuto(e.target.checked)} />
               <span>
@@ -357,6 +369,7 @@ export function AdminPanel({ quiz, initialGame, teamCodes }: { quiz: Question[];
             teams={teams}
             codeById={codeById}
             answeredIds={answeredIds}
+            lockedIds={lockedIds}
             totals={totals}
             act={act}
             pending={pending}
@@ -433,6 +446,7 @@ function TeamsPanel({
   teams,
   codeById,
   answeredIds,
+  lockedIds,
   totals,
   act,
   pending,
@@ -441,6 +455,7 @@ function TeamsPanel({
   teams: { id: string; name: string | null; slot: number; is_demo: boolean; joined_at: string | null }[];
   codeById: Map<string, string>;
   answeredIds: Set<string>;
+  lockedIds: Set<string>;
   totals: Map<string, number>;
   act: Act;
   pending: boolean;
@@ -476,8 +491,8 @@ function TeamsPanel({
               </span>
             )}
             <span className="tabular w-12 text-right text-xs text-cream/50">{totals.get(t.id) ?? 0} p</span>
-            <span className={`w-5 text-center ${answeredIds.has(t.id) ? "text-gold" : "text-transparent"}`} title="Har svaret">
-              ✓
+            <span className={`w-5 text-center ${answeredIds.has(t.id) ? "text-gold" : "text-transparent"}`} title={lockedIds.has(t.id) ? "Har låst sit svar" : "Har svaret"}>
+              {lockedIds.has(t.id) ? "🔒" : "✓"}
             </span>
             {confirmId === t.id ? (
               <button

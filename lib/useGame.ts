@@ -65,12 +65,15 @@ export function useGame(gameId: string | null | undefined) {
   const loadAnswers = useCallback(
     async (qKey: string | null) => {
       if (!gameId || !qKey) return setAnswers([]);
-      const { data } = await getSupabase()
-        .from("answers")
-        .select(ANSWER_COLUMNS)
-        .eq("game_id", gameId)
-        .eq("question_key", qKey);
-      if (qKeyRef.current === qKey) setAnswers((data as AnswerStatus[]) ?? []);
+      const sb = getSupabase();
+      const [{ data }, locks] = await Promise.all([
+        sb.from("answers").select(ANSWER_COLUMNS).eq("game_id", gameId).eq("question_key", qKey),
+        // locked_at needs the answer_lock migration – ignore the error if it isn't there yet
+        sb.from("answers").select("team_id, locked_at").eq("game_id", gameId).eq("question_key", qKey),
+      ]);
+      const lockedBy = new Map(((locks.error ? [] : locks.data) ?? []).map((l) => [l.team_id as string, l.locked_at as string | null]));
+      if (qKeyRef.current === qKey)
+        setAnswers(((data as AnswerStatus[]) ?? []).map((a) => ({ ...a, locked_at: lockedBy.get(a.team_id) ?? null })));
     },
     [gameId],
   );

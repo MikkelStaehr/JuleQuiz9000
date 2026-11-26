@@ -317,6 +317,7 @@ function QuestionView({ state, audioPlaying }: { state: GameState; audioPlaying:
 
 function TeamStatus({ teams, answers, drawing, locked }: { teams: Team[]; answers: AnswerStatus[]; drawing: boolean; locked: boolean }) {
   const done = new Set(answers.map((a) => a.team_id));
+  const lockedIds = new Set(answers.filter((a) => a.locked_at).map((a) => a.team_id));
   return (
     <div className="flex flex-wrap justify-center gap-[0.8vw] px-[3vw] pb-[3vh]">
       {teams.map((t) => {
@@ -329,7 +330,9 @@ function TeamStatus({ teams, answers, drawing, locked }: { teams: Team[]; answer
             }`}
           >
             <span className="max-w-[16vw] truncate">{t.name}</span>
-            <span className={ok ? "" : "italic text-cream/50"}>{ok ? "svaret ✓" : drawing ? (locked ? "afleverer…" : "tegner…") : "…"}</span>
+            <span className={ok ? "" : "italic text-cream/50"}>
+              {lockedIds.has(t.id) ? "låst 🔒" : ok ? "svaret ✓" : drawing ? (locked ? "afleverer…" : "tegner…") : "…"}
+            </span>
           </span>
         );
       })}
