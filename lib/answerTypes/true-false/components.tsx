@@ -130,7 +130,7 @@ export function TrueFalseReveal({ reveal, answerText, step, teams, answers, scor
           const right = c !== null && c === facit;
           const s = scoreFor(t.id);
           return (
-            <div key={t.id} className="[perspective:1200px]">
+            <div key={t.id} className={`[perspective:1200px] ${step >= 2 && c !== null ? (right ? "fun-hop" : "fun-nope") : ""}`}>
               <div
                 className="relative h-[24vh] transition-transform duration-700 [transform-style:preserve-3d]"
                 style={{ transform: step >= 1 ? "rotateY(180deg)" : "none", transitionDelay: `${i * 80}ms` }}

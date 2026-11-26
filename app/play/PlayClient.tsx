@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Wordmark } from "@/components/Brand";
+import { Confetti } from "@/components/Fun";
 import type { DrawingCanvasHandle } from "@/components/DrawingCanvas";
 import { REGISTRY } from "@/lib/answerTypes/registry";
 import { serverNow, useClockSync, useCountdown } from "@/lib/clock";
@@ -216,11 +217,12 @@ function TeamScreen({ session, onLeave }: { session: Session; onLeave: () => voi
           <p className="font-display text-4xl font-semibold">{state.answer_text}</p>
           {typeof state.reveal_payload?.source === "string" && <p className="text-xs text-cream/50">Kilde: {state.reveal_payload.source}</p>}
           {myScore ? (
-            <p className="animate-pop mt-4 text-3xl font-bold text-gold">{signed(myScore.points)} point</p>
+            <p className={`animate-pop mt-4 text-3xl font-bold ${myScore.points < 0 ? "fun-nope text-[#ff8a8d]" : "text-gold"}`}>{signed(myScore.points)} point</p>
           ) : (
             <p className="mt-4 text-cream/50">Point kommer…</p>
           )}
           <p className="mt-4 text-cream/50">Kig op på storskærmen</p>
+          {myScore && myScore.points > 0 && <Confetti seed={`me-${state.question_key}`} count={70} colors={[color, "#d9b97a", "#f8f4ea"]} />}
         </Center>
       ) : state.phase === "scoreboard" || state.phase === "finished" ? (
         <Center>

@@ -1,6 +1,7 @@
 "use client";
 
 import type { Standing } from "@/lib/useGame";
+import { Crown } from "./Fun";
 
 /** Large-screen scoreboard with proportional bars and movement since the previous round. */
 export function Scoreboard({ ranked, title = "Stilling", subtitle }: { ranked: Standing[]; title?: string; subtitle?: string }) {
@@ -13,7 +14,7 @@ export function Scoreboard({ ranked, title = "Stilling", subtitle }: { ranked: S
         const top = t.rank === 1 && t.total > 0;
         const move = t.prevRank === null ? 0 : t.prevRank - t.rank; // + = moved up
         return (
-          <div key={t.id} className="animate-fade-up flex items-center gap-[1.4vw]" style={{ animationDelay: `${i * 90}ms` }}>
+          <div key={t.id} className={`animate-fade-up flex items-center gap-[1.4vw] ${move > 0 ? "fun-rank-up" : ""}`} style={{ animationDelay: `${i * 90}ms` }}>
             <span
               className={`tabular grid h-[6.2vh] w-[6.2vh] shrink-0 place-items-center rounded-full text-[2.6vh] font-bold ${
                 top ? "bg-gold text-ink" : "border border-gold/40 text-gold"
@@ -39,6 +40,7 @@ export function Scoreboard({ ranked, title = "Stilling", subtitle }: { ranked: S
               />
               <div className="relative flex h-full items-center px-[1.4vw]">
                 <span className={`truncate text-[3vh] font-semibold ${top ? "text-ink" : "text-cream"}`}>{t.name}</span>
+                {top && <Crown className="ml-[0.8vw] text-[4vh]" />}
               </div>
             </div>
             <span className="tabular w-[7vw] shrink-0 text-right text-[4vh] font-bold text-gold">{t.total}</span>

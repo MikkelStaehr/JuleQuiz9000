@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { RoundLabel, Star, Wordmark } from "@/components/Brand";
+import { Confetti, RoundWinner, Sleigh, Snowfall, Stamp, type RoundWinnerTeam } from "@/components/Fun";
 import { Scoreboard } from "@/components/Scoreboard";
 import { TimerRing } from "@/components/TimerRing";
 import { REGISTRY } from "@/lib/answerTypes/registry";
 import { useClockSync } from "@/lib/clock";
-import { unlockAudio } from "@/lib/sound";
-import { multiplierLabel, publicQuestion, type AnswerStatus, type GameState, type Team } from "@/lib/types";
+import { fanfare, unlockAudio } from "@/lib/sound";
+import { multiplierLabel, publicQuestion, teamColor, type AnswerStatus, type GameState, type Score, type Team } from "@/lib/types";
 import { standings, useActiveGame, useGame, useRevealedAnswers } from "@/lib/useGame";
 
 export function DisplayClient() {
@@ -91,8 +92,9 @@ export function DisplayClient() {
               scoreFor={(id) => scoreFor(id, state.question_key)}
               totals={totals}
             />
+            {state.reveal_step === facitStep(state) && <Confetti seed={`facit-${state.question_key}`} />}
             {typeof state.reveal_payload?.source === "string" &&
-              state.reveal_step >= (state.answer_type === "draw" ? Number(state.reveal_payload?.drawCount ?? 0) + 2 : 2) && (
+              state.reveal_step >= facitStep(state) && (
               <p className="animate-fade-up mt-[1vh] self-center text-[1.2vw] text-cream/55">Kilde: {state.reveal_payload.source}</p>
             )}
           </div>
@@ -100,15 +102,7 @@ export function DisplayClient() {
         break;
       }
       case "scoreboard":
-        body = (
-          <Centered>
-            <Scoreboard
-              ranked={standings(teams, scores, state.current_round)}
-              title="Stilling"
-              subtitle={state.current_index >= state.round_size ? `Efter runde ${state.current_round} · ${state.round_title}` : undefined}
-            />
-          </Centered>
-        );
+        body = <ScoreboardView state={state} teams={teams} scores={scores} sound={started} />;
         break;
       case "finished":
         body = (
@@ -119,6 +113,8 @@ export function DisplayClient() {
               <Star className="h-[4vh] w-[4vh]" />
             </div>
             <Scoreboard ranked={standings(teams, scores, state.total_rounds)} title="Glædelig jul – her er vinderne!" />
+            <Confetti seed="finale" mode="rain" loop count={120} />
+            <Sleigh delay={2} top={4} />
           </Centered>
         );
         break;
@@ -184,7 +180,7 @@ function Waiting() {
 function MultiplierBadge({ m, small = false }: { m: number; small?: boolean }) {
   return (
     <span
-      className={`animate-pop inline-flex items-center gap-[0.6em] rounded-full bg-gold font-bold uppercase text-ink shadow-[0_0_4vmin_rgba(217,185,122,0.45)] ${
+      className={`animate-pop fun-wobble inline-flex items-center gap-[0.6em] rounded-full bg-gold font-bold uppercase text-ink shadow-[0_0_4vmin_rgba(217,185,122,0.45)] ${
         small ? "px-[1vw] py-[0.4vh] text-[1vw] tracking-[0.2em]" : "px-[2.4vw] py-[1.2vh] text-[2.6vw] tracking-[0.25em]"
       }`}
       style={small ? undefined : { animationDelay: "350ms" }}
@@ -205,6 +201,8 @@ function questionSize(text: string, compact: boolean) {
 function RoundIntro({ state, teams, origin, showJoin }: { state: GameState; teams: Team[]; origin: string; showJoin: boolean }) {
   return (
     <Centered>
+      <Snowfall seed={`snow-${state.current_round}`} />
+      {state.current_index === 1 && <Sleigh delay={1.2} top={6} />}
       <div className="flex flex-col items-center gap-[3vh] text-center">
         <Wordmark size={showJoin ? "xl" : "md"} />
         <div className="hairline w-[40vw]" />
@@ -366,6 +364,43 @@ function CountdownView({
       {Extra && <Extra q={q} compact />}
       <div className="h-[2vh]" />
       <TeamStatus teams={teams} answers={answers} drawing={!!ui.submitOnLock} locked={state.phase === "locked"} />
+      {state.phase === "locked" && <Stamp text="Tiden er gået!" />}
     </div>
+  );
+}
+
+/** Reveal step on which the facit appears (draw: after every drawing + the grid). */
+function facitStep(state: GameState) {
+  return state.answer_type === "draw" ? Number(state.reveal_payload?.drawCount ?? 0) + 2 : 2;
+}
+
+/** Standings; after the last question of a round the round winner is celebrated first. */
+function ScoreboardView({ state, teams, scores, sound }: { state: GameState; teams: Team[]; scores: Score[]; sound: boolean }) {
+  const endOfRound = state.current_index >= state.round_size;
+  const roundPts = new Map<string, number>();
+  for (const s of scores) if (s.round === state.current_round) roundPts.set(s.team_id, (roundPts.get(s.team_id) ?? 0) + s.points);
+  const best = Math.max(0, ...roundPts.values());
+  const winners: RoundWinnerTeam[] =
+    endOfRound && best > 0
+      ? teams
+          .filter((t) => t.name && roundPts.get(t.id) === best)
+          .map((t) => ({ id: t.id, name: t.name!, color: teamColor(t.slot), roundPoints: best }))
+      : [];
+  const [celebrate, setCelebrate] = useState(winners.length > 0);
+  const done = useCallback(() => setCelebrate(false), []);
+  useEffect(() => {
+    if (celebrate && sound) fanfare();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <Centered>
+      <Scoreboard
+        ranked={standings(teams, scores, state.current_round)}
+        title="Stilling"
+        subtitle={endOfRound ? `Efter runde ${state.current_round} · ${state.round_title}` : undefined}
+      />
+      {!celebrate && <Sleigh delay={1.5} top={2} />}
+      {celebrate && <RoundWinner round={state.current_round} winners={winners} onDone={done} />}
+    </Centered>
   );
 }

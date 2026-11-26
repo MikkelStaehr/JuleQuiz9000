@@ -44,6 +44,22 @@ export function buzzer() {
   blip(147, 0.8, 0.3, "square");
 }
 
+/** Short victory fanfare (round winner). */
+export function fanfare() {
+  const notes: [number, number, number][] = [
+    [523.25, 0, 0.16], // C5
+    [659.25, 130, 0.16], // E5
+    [783.99, 260, 0.16], // G5
+    [1046.5, 390, 0.5], // C6
+    [783.99, 640, 0.14], // G5
+    [1046.5, 760, 0.8], // C6
+  ];
+  for (const [f, at, dur] of notes) setTimeout(() => {
+    blip(f, dur, 0.22, "triangle");
+    blip(f / 2, dur, 0.08, "square");
+  }, at);
+}
+
 /** Soft chime (reveal). */
 export function chime() {
   blip(1046.5, 0.6, 0.15, "sine");

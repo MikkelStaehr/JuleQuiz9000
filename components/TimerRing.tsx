@@ -43,6 +43,7 @@ export function TimerRing({
   const color = urgent || done ? "var(--color-alarm)" : "var(--color-gold)";
 
   return (
+    <div className={urgent && secs <= 3 ? "fun-shake" : ""}>
     <div
       className={`relative grid place-items-center ${urgent ? "animate-pulse-ring" : ""}`}
       style={{ width: size, height: size }}
@@ -84,6 +85,7 @@ export function TimerRing({
           </span>
         )}
       </div>
+    </div>
     </div>
   );
 }
