@@ -77,7 +77,7 @@ function shownFields(q: Question) {
     media_type: q.mediaType,
     media_url: q.mediaUrl,
     show_text_on_play: q.showTextOnPlay,
-    public_payload: META[q.answerType].publicPayload(q),
+    public_payload: { ...META[q.answerType].publicPayload(q), country: q.country },
   };
 }
 

@@ -67,7 +67,8 @@
           "text": "Er det lovligt at cykle uden lys, når det er mørkt?",
           "mediaType": "none",
           "mediaUrl": null,
-          "answer": false
+          "answer": false,
+          "country": "DK"
         }
       ]
     },

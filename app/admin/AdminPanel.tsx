@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { RoundLabel, Wordmark } from "@/components/Brand";
+import { Flag } from "@/components/Flag";
 import { TimerRing } from "@/components/TimerRing";
+import { inCountry } from "@/lib/countries";
 import { META } from "@/lib/answerTypes/meta";
 import { REGISTRY } from "@/lib/answerTypes/registry";
 import type { Question, ScoreResult } from "@/lib/answerTypes/types";
@@ -250,6 +252,11 @@ export function AdminPanel({ quiz, initialGame, teamCodes }: { quiz: Question[];
                       <span className="rounded-full bg-gold px-2 py-0.5 font-bold text-ink">{multiplierLabel(q.pointMultiplier)}</span>
                     )}
                   </p>
+                  {q.country && (
+                    <p className="flex items-center gap-2 text-sm font-semibold text-gold-soft">
+                      <Flag code={q.country} className="h-5" /> {inCountry(q.country)}
+                    </p>
+                  )}
                   <p className="font-display text-3xl leading-tight">{q.text}</p>
                   <div className="rounded-xl border border-gold/40 bg-gold/10 px-4 py-3">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-gold">Facit · kun quizmaster</p>
@@ -322,7 +329,10 @@ export function AdminPanel({ quiz, initialGame, teamCodes }: { quiz: Question[];
               <p className="mb-1 text-xs uppercase tracking-widest text-cream/50">
                 Næste · R{nextQ.round} S{nextQ.index} {nextQ.round !== q?.round && `· ny runde: ${nextQ.roundTitle}`}
               </p>
-              <p className="text-cream/90">{nextQ.text}</p>
+              <p className="text-cream/90">
+                {nextQ.country && <Flag code={nextQ.country} className="mr-2 h-4 align-[-2px]" />}
+                {nextQ.text}
+              </p>
               <p className="mt-1 text-gold/80">Facit: {META[nextQ.answerType].answerText(nextQ)}</p>
             </div>
           )}

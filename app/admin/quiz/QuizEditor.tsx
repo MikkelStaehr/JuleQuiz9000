@@ -3,7 +3,9 @@
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Wordmark } from "@/components/Brand";
+import { Flag } from "@/components/Flag";
 import { parseCoordinates } from "@/lib/answerTypes/geo/coords";
+import { countryList, countryName } from "@/lib/countries";
 import { WORLD, type MapView } from "@/lib/answerTypes/geo/view";
 import { getSupabase } from "@/lib/supabase/browser";
 import { createMediaUpload, saveQuiz } from "../actions";
@@ -527,6 +529,8 @@ function QuestionCard({
         </div>
       </div>
 
+      <CountryField value={typeof q.country === "string" ? q.country : null} onChange={(c) => onChange({ country: c ?? undefined })} />
+
       <Field label="Kilde (valgfri)" hint="Vises under facit på storskærmen, fx “Danmarks Statistik, 2025”">
         <input className={input} value={typeof q.source === "string" ? q.source : ""} maxLength={200} onChange={(e) => onChange({ source: e.target.value || undefined })} />
       </Field>
@@ -674,6 +678,70 @@ function GeoAnswer({ q, onChange }: { q: RawQuestion; onChange: (patch: Partial<
 }
 
 const round6 = (n: number) => Math.round(n * 1e6) / 1e6;
+
+const COUNTRIES = typeof Intl !== "undefined" ? countryList() : [];
+
+/** Country picker: type the Danish name (datalist), shows the flag. */
+function CountryField({ value, onChange }: { value: string | null; onChange: (code: string | null) => void }) {
+  const [text, setText] = useState(value ? countryName(value) : "");
+  const [bad, setBad] = useState(false);
+  const commit = (t: string) => {
+    const v = t.trim();
+    if (!v) {
+      setBad(false);
+      return onChange(null);
+    }
+    const hit =
+      COUNTRIES.find((c) => c.name.toLowerCase() === v.toLowerCase()) ??
+      COUNTRIES.find((c) => c.code === v.toUpperCase()) ??
+      (COUNTRIES.filter((c) => c.name.toLowerCase().startsWith(v.toLowerCase())).length === 1
+        ? COUNTRIES.find((c) => c.name.toLowerCase().startsWith(v.toLowerCase()))
+        : undefined);
+    if (!hit) return setBad(true);
+    setBad(false);
+    setText(hit.name);
+    onChange(hit.code);
+  };
+  return (
+    <Field label="Land (valgfrit)" hint="Vises med flag på storskærm og holdskærme – fx til “Er det lovligt?”, hvor loven afhænger af landet">
+      <div className="flex items-center gap-3">
+        {value ? <Flag code={value} className="h-9" /> : <span className="grid h-9 w-[54px] place-items-center rounded bg-pine-950/60 text-xs text-cream/30">flag</span>}
+        <input
+          className={`${input} min-w-0 flex-1 ${bad ? "border-alarm" : ""}`}
+          list="country-list"
+          value={text}
+          placeholder="Skriv et land, fx Singapore"
+          onChange={(e) => {
+            setText(e.target.value);
+            setBad(false);
+            // picking from the list fills the exact name → apply right away
+            if (COUNTRIES.some((c) => c.name === e.target.value)) commit(e.target.value);
+          }}
+          onBlur={() => commit(text)}
+          onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), commit(text))}
+        />
+        {value && (
+          <button
+            type="button"
+            className="btn btn-ghost px-3 py-1.5 text-xs"
+            onClick={() => {
+              setText("");
+              onChange(null);
+            }}
+          >
+            Fjern
+          </button>
+        )}
+      </div>
+      {bad && <span className="block text-xs text-[#ffb4b6]">Kender ikke det land – vælg fra listen</span>}
+      <datalist id="country-list">
+        {COUNTRIES.map((c) => (
+          <option key={c.code} value={c.name} />
+        ))}
+      </datalist>
+    </Field>
+  );
+}
 
 function guessKind(url: string | null | undefined): Media {
   if (!url) return "none";

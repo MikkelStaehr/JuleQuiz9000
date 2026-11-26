@@ -18,7 +18,7 @@ import {
  * question: { key, text, mediaType, mediaUrl, timerSeconds?, answer, showTextOnPlay?, revealMediaUrl?, source?, ...type-specific }
  * unit / parts may also be set per question (overrides the round).
  */
-const COMMON = new Set(["key", "text", "mediaType", "mediaUrl", "timerSeconds", "answer", "showTextOnPlay", "revealMediaUrl", "unit", "parts", "source"]);
+const COMMON = new Set(["key", "text", "mediaType", "mediaUrl", "timerSeconds", "answer", "showTextOnPlay", "revealMediaUrl", "unit", "parts", "source", "country"]);
 
 /** An uploaded/linked media file: absolute http(s) URL or a site path like /media/x.jpg */
 export const isMediaUrl = (u: string) => /^(https?:\/\/\S+|\/\S+)$/.test(u.trim());
@@ -74,6 +74,8 @@ export function parseQuiz(input: unknown): Question[] {
           throw qfail(`“${q[f]}” er ikke en adresse til et medie (https://… eller /media/…). Kilder skrives i feltet “Kilde”.`);
       const timer = (q.timerSeconds as number | undefined) ?? defTimer;
       if (!Number.isInteger(timer) || timer < 5) throw qfail("timerSeconds");
+      if (q.country !== undefined && q.country !== null && !(typeof q.country === "string" && /^[A-Z]{2}$/.test(q.country)))
+        throw qfail("country skal være en landekode, fx DK eller SG");
       const parts = q.parts ?? r.parts ?? [];
       if (!isStrList(parts)) throw qfail("parts skal være en liste af tekster");
 
@@ -92,6 +94,7 @@ export function parseQuiz(input: unknown): Question[] {
         showTextOnPlay: q.showTextOnPlay === true,
         revealMediaUrl: (q.revealMediaUrl as string | null | undefined) ?? null,
         source: typeof q.source === "string" && q.source.trim() ? q.source.trim().slice(0, 200) : null,
+        country: typeof q.country === "string" && /^[A-Z]{2}$/.test(q.country) ? q.country : null,
         extra: Object.fromEntries(Object.entries(q).filter(([k]) => !COMMON.has(k))),
         scoring: type === "draw" ? scoring : null,
         unit: String(q.unit ?? r.unit ?? ""),

@@ -19,6 +19,7 @@ export function makeQuestion(answerType: AnswerTypeId, answer: unknown, over: Pa
     showTextOnPlay: false,
     revealMediaUrl: null,
     source: null,
+    country: null,
     extra: {},
     scoring: answerType === "draw" ? "manual" : null,
     unit: "",

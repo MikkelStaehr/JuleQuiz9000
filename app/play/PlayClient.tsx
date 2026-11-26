@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Wordmark } from "@/components/Brand";
+import { CountryBanner } from "@/components/Flag";
 import { Confetti } from "@/components/Fun";
 import type { DrawingCanvasHandle } from "@/components/DrawingCanvas";
 import { REGISTRY } from "@/lib/answerTypes/registry";
@@ -453,6 +454,11 @@ function AnswerArea({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
+      {typeof q.payload.country === "string" && /^[A-Z]{2}$/.test(q.payload.country) && (
+        <div className="shrink-0">
+          <CountryBanner code={q.payload.country} size="sm" />
+        </div>
+      )}
       {q.showTextOnPlay && q.text && (
         <p className={`shrink-0 text-center font-display font-semibold leading-tight ${q.text.length > 120 ? "text-xl" : "text-2xl sm:text-3xl"}`}>{q.text}</p>
       )}

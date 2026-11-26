@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { RoundLabel, Star, Wordmark } from "@/components/Brand";
+import { CountryBanner } from "@/components/Flag";
 import { Confetti, RoundWinner, Sleigh, Snowfall, Stamp, type RoundWinnerTeam } from "@/components/Fun";
 import { Scoreboard } from "@/components/Scoreboard";
 import { TimerRing } from "@/components/TimerRing";
@@ -79,6 +80,11 @@ export function DisplayClient() {
         const Reveal = REGISTRY[q.answerType].Reveal;
         body = (
           <div className="flex min-h-0 w-full flex-1 flex-col px-[3vw] pb-[3vh] pt-[1vh]">
+            {countryOf(q.payload) && (
+              <div className="mb-[0.5vh] self-center">
+                <CountryBanner code={countryOf(q.payload)!} size="md" />
+              </div>
+            )}
             {q.answerType !== "geo" && (
               <p className="mb-[1vh] max-w-[88vw] self-center text-center font-display text-[2.4vw] leading-tight text-cream/85">{q.text}</p>
             )}
@@ -308,6 +314,7 @@ function QuestionView({ state, audioPlaying }: { state: GameState; audioPlaying:
   const Extra = REGISTRY[q.answerType].DisplayQuestion;
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-[4vh] px-[6vw] pb-[4vh] text-center">
+      {countryOf(q.payload) && <CountryBanner code={countryOf(q.payload)!} size="lg" />}
       <h1 className={`font-display font-semibold leading-[1.08] text-cream ${questionSize(q.text, state.media_type !== "none")}`}>{q.text}</h1>
       <Media state={state} audioPlaying={audioPlaying} compact={false} />
       {Extra && <Extra q={q} compact={false} />}
@@ -359,6 +366,11 @@ function CountdownView({
   const hasMedia = state.media_type !== "none" && !!state.media_url;
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {countryOf(q.payload) && (
+        <div className="pt-[1.5vh]">
+          <CountryBanner code={countryOf(q.payload)!} size="md" />
+        </div>
+      )}
       <h1 className={`px-[6vw] pt-[2vh] text-center font-display font-semibold leading-[1.1] text-cream ${questionSize(q.text, true)}`}>{q.text}</h1>
       <div className="flex min-h-0 flex-1 items-center justify-center gap-[6vw]">
         {hasMedia && <Media state={state} audioPlaying={audioPlaying} compact />}
@@ -371,6 +383,8 @@ function CountdownView({
     </div>
   );
 }
+
+const countryOf = (p: Record<string, unknown>) => (typeof p.country === "string" && /^[A-Z]{2}$/.test(p.country) ? p.country : null);
 
 /** Reveal step on which the facit appears. */
 function facitStep(state: GameState) {
