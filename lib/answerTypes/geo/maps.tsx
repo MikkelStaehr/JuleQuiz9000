@@ -120,17 +120,28 @@ function ViewReporter({ onView }: { onView: (v: MapView) => void }) {
   return null;
 }
 
-/** Click to set the facit; reports the current view so it can be saved as mapStart. */
+function FlyToFocus({ focus }: { focus: { lat: number; lng: number; n: number } | null }) {
+  const map = useMap();
+  useEffect(() => {
+    if (focus) map.flyTo([focus.lat, focus.lng], Math.max(map.getZoom(), 13), { duration: 1.2 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus?.n]);
+  return null;
+}
+
+/** Click to set the facit; reports the current view so it can be saved as mapStart. `focus` flies the map to a point. */
 export function EditorMap({
   start,
   facit,
   onPick,
   onView,
+  focus = null,
 }: {
   start: MapView;
   facit: { lat: number; lng: number; label?: string } | null;
   onPick: (p: { lat: number; lng: number }) => void;
   onView: (v: MapView) => void;
+  focus?: { lat: number; lng: number; n: number } | null;
 }) {
   const icon = useMemo(() => pinIcon("#d9b97a", { facit: true, size: 30, label: facit?.label || undefined }), [facit?.label]);
   return (
@@ -139,6 +150,7 @@ export function EditorMap({
       <AutoResize />
       <ClickToPin onPick={onPick} disabled={false} />
       <ViewReporter onView={onView} />
+      <FlyToFocus focus={focus} />
       {facit && (
         <Marker
           position={[facit.lat, facit.lng]}

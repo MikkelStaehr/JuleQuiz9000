@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Wordmark } from "@/components/Brand";
+import { parseCoordinates } from "@/lib/answerTypes/geo/coords";
 import { WORLD, type MapView } from "@/lib/answerTypes/geo/view";
 import { getSupabase } from "@/lib/supabase/browser";
 import { createMediaUpload, saveQuiz } from "../actions";
@@ -596,14 +597,64 @@ function GeoAnswer({ q, onChange }: { q: RawQuestion; onChange: (patch: Partial<
   const facit = typeof a.lat === "number" && typeof a.lng === "number" ? { lat: a.lat, lng: a.lng, label: a.label ?? "" } : null;
   const [view, setView] = useState<MapView | null>(null);
   const start = useMemo(() => q.mapStart ?? (facit ? { lat: facit.lat, lng: facit.lng, zoom: 5 } : WORLD), []); // eslint-disable-line react-hooks/exhaustive-deps
+  const [coordText, setCoordText] = useState("");
+  const [coordErr, setCoordErr] = useState(false);
+  const [focus, setFocus] = useState<{ lat: number; lng: number; n: number } | null>(null);
+  const applyCoords = () => {
+    if (!coordText.trim()) return;
+    const p = parseCoordinates(coordText);
+    if (!p) return setCoordErr(true);
+    setCoordErr(false);
+    onChange({ answer: { ...a, lat: p.lat, lng: p.lng } });
+    setFocus((f) => ({ ...p, n: (f?.n ?? 0) + 1 }));
+    setCoordText("");
+  };
   return (
     <div className="space-y-2">
       <Field label="Facit – stedets navn">
         <input className={input} value={a.label ?? ""} placeholder="fx Ribe, Danmark" onChange={(e) => onChange({ answer: { ...a, label: e.target.value } })} />
       </Field>
-      <p className="text-xs text-cream/50">Klik på kortet for at sætte facit (træk i nålen for at justere).</p>
+      <Field
+        label="Indsæt koordinater"
+        hint="Fx 55.3277, 8.7600 – i Google Maps: højreklik på stedet og klik på tallene øverst for at kopiere. Grader (55°19'39.7&quot;N …) og Google Maps-links virker også."
+      >
+        <div className="flex gap-2">
+          <input
+            className={`${input} min-w-0 flex-1 ${coordErr ? "border-alarm" : ""}`}
+            value={coordText}
+            placeholder="55.3277, 8.7600"
+            onChange={(e) => {
+              setCoordText(e.target.value);
+              setCoordErr(false);
+            }}
+            onPaste={(e) => {
+              // pasting is the common case → apply right away
+              const p = parseCoordinates(e.clipboardData.getData("text"));
+              if (p) {
+                e.preventDefault();
+                onChange({ answer: { ...a, lat: p.lat, lng: p.lng } });
+                setFocus((f) => ({ ...p, n: (f?.n ?? 0) + 1 }));
+                setCoordText("");
+                setCoordErr(false);
+              }
+            }}
+            onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), applyCoords())}
+          />
+          <button type="button" className="btn btn-ghost px-4" onClick={applyCoords}>
+            Sæt
+          </button>
+        </div>
+        {coordErr && <span className="block text-xs text-[#ffb4b6]">Kunne ikke læse koordinaterne – prøv formatet 55.3277, 8.7600</span>}
+      </Field>
+      <p className="text-xs text-cream/50">…eller klik på kortet for at sætte facit (træk i nålen for at justere).</p>
       <div className="h-64 overflow-hidden rounded-xl ring-1 ring-gold/25">
-        <EditorMap start={start} facit={facit} onPick={(p) => onChange({ answer: { ...a, lat: round6(p.lat), lng: round6(p.lng) } })} onView={setView} />
+        <EditorMap
+          start={start}
+          facit={facit}
+          focus={focus}
+          onPick={(p) => onChange({ answer: { ...a, lat: round6(p.lat), lng: round6(p.lng) } })}
+          onView={setView}
+        />
       </div>
       <div className="flex flex-wrap items-center gap-2 text-xs text-cream/60">
         {facit && <span className="tabular">{facit.lat.toFixed(4)}, {facit.lng.toFixed(4)}</span>}
