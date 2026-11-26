@@ -31,6 +31,8 @@ export interface Question {
   answer: unknown;
   showTextOnPlay: boolean;
   revealMediaUrl: string | null;
+  /** Optional source for the facit (e.g. "Danmarks Statistik, 2025") – shown at reveal. */
+  source: string | null;
   /** Other quiz.json fields (mapStart …) */
   extra: Record<string, unknown>;
   // ── round settings ──

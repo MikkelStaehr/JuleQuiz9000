@@ -15,10 +15,10 @@ import {
  * /data/quiz.json
  * { rounds: [{ number, title, answerType, pointMultiplier?, defaultTimerSeconds?, pointsByRank?, pointsCorrect?,
  *              scoring? (draw), unit?, parts?, manualPoints?, labels? (true-false), wagerEnabled?, questions: [...] }] }
- * question: { key, text, mediaType, mediaUrl, timerSeconds?, answer, showTextOnPlay?, revealMediaUrl?, ...type-specific }
- * unit / parts may also be set per question.
+ * question: { key, text, mediaType, mediaUrl, timerSeconds?, answer, showTextOnPlay?, revealMediaUrl?, source?, ...type-specific }
+ * unit / parts may also be set per question (overrides the round).
  */
-const COMMON = new Set(["key", "text", "mediaType", "mediaUrl", "timerSeconds", "answer", "showTextOnPlay", "revealMediaUrl", "unit", "parts"]);
+const COMMON = new Set(["key", "text", "mediaType", "mediaUrl", "timerSeconds", "answer", "showTextOnPlay", "revealMediaUrl", "unit", "parts", "source"]);
 
 const isStrList = (v: unknown): v is string[] => Array.isArray(v) && v.every((s) => typeof s === "string");
 const isNumList = (v: unknown): v is number[] => Array.isArray(v) && v.every((n) => typeof n === "number" && Number.isFinite(n));
@@ -85,6 +85,7 @@ export function parseQuiz(input: unknown): Question[] {
         answer: q.answer,
         showTextOnPlay: q.showTextOnPlay === true,
         revealMediaUrl: (q.revealMediaUrl as string | null | undefined) ?? null,
+        source: typeof q.source === "string" && q.source.trim() ? q.source.trim().slice(0, 200) : null,
         extra: Object.fromEntries(Object.entries(q).filter(([k]) => !COMMON.has(k))),
         scoring: type === "draw" ? scoring : null,
         unit: String(q.unit ?? r.unit ?? ""),

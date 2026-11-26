@@ -89,6 +89,10 @@ export function DisplayClient() {
               scoreFor={(id) => scoreFor(id, state.question_key)}
               totals={totals}
             />
+            {typeof state.reveal_payload?.source === "string" &&
+              state.reveal_step >= (state.answer_type === "draw" ? Number(state.reveal_payload?.drawCount ?? 0) + 2 : 2) && (
+              <p className="animate-fade-up mt-[1vh] text-[1.2vw] text-cream/55">Kilde: {state.reveal_payload.source}</p>
+            )}
           </div>
         );
         break;

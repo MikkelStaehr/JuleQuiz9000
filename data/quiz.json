@@ -6,7 +6,11 @@
       "answerType": "draw",
       "scoring": "closest",
       "unit": "kr.",
-      "pointsByRank": [3, 2, 1],
+      "pointsByRank": [
+        3,
+        2,
+        1
+      ],
       "defaultTimerSeconds": 45,
       "questions": [
         {
@@ -22,7 +26,11 @@
       "number": 2,
       "title": "Hvor fanden er vi?",
       "answerType": "geo",
-      "pointsByRank": [3, 2, 1],
+      "pointsByRank": [
+        3,
+        2,
+        1
+      ],
       "defaultTimerSeconds": 60,
       "questions": [
         {
@@ -30,8 +38,16 @@
           "text": "Hvor er dette billede taget?",
           "mediaType": "image",
           "mediaUrl": "/media/streetview-placeholder.svg",
-          "answer": { "lat": 55.3277, "lng": 8.76, "label": "Ribe, Danmark" },
-          "mapStart": { "lat": 56.1, "lng": 10.4, "zoom": 6 }
+          "answer": {
+            "lat": 55.3277,
+            "lng": 8.76,
+            "label": "Ribe, Danmark"
+          },
+          "mapStart": {
+            "lat": 56.1,
+            "lng": 10.4,
+            "zoom": 6
+          }
         }
       ]
     },
@@ -39,7 +55,10 @@
       "number": 3,
       "title": "Er det lovligt?",
       "answerType": "true-false",
-      "labels": { "true": "LOVLIGT", "false": "ULOVLIGT" },
+      "labels": {
+        "true": "LOVLIGT",
+        "false": "ULOVLIGT"
+      },
       "wagerEnabled": false,
       "defaultTimerSeconds": 15,
       "questions": [
@@ -56,7 +75,10 @@
       "number": 4,
       "title": "Fake news eller virkelighed?",
       "answerType": "true-false",
-      "labels": { "true": "ÆGTE", "false": "FAKE" },
+      "labels": {
+        "true": "ÆGTE",
+        "false": "FAKE"
+      },
       "wagerEnabled": false,
       "defaultTimerSeconds": 20,
       "questions": [
@@ -76,7 +98,10 @@
       "title": "Musikalsk forvirring",
       "answerType": "draw",
       "scoring": "manual-parts",
-      "parts": ["Sang", "Kunstner"],
+      "parts": [
+        "Sang",
+        "Kunstner"
+      ],
       "pointsCorrect": 1,
       "defaultTimerSeconds": 45,
       "questions": [
@@ -94,7 +119,11 @@
       "title": "Hvad har de anmeldt?",
       "answerType": "draw",
       "scoring": "manual",
-      "manualPoints": [0, 1, 2],
+      "manualPoints": [
+        0,
+        1,
+        2
+      ],
       "defaultTimerSeconds": 45,
       "questions": [
         {
@@ -110,18 +139,24 @@
     {
       "number": 7,
       "title": "Hvad siger statistikken?",
-      "answerType": "true-false",
-      "labels": { "true": "SANDT", "false": "FALSK" },
-      "wagerEnabled": true,
+      "answerType": "draw",
+      "scoring": "closest",
       "pointMultiplier": 2,
-      "defaultTimerSeconds": 20,
+      "pointsByRank": [
+        3,
+        2,
+        1
+      ],
+      "defaultTimerSeconds": 45,
       "questions": [
         {
           "key": "r7q1",
-          "text": "Mere end 70 % af Jordens overflade er dækket af vand.",
+          "text": "Hvor stor en del af Jordens overflade er dækket af vand?",
           "mediaType": "none",
           "mediaUrl": null,
-          "answer": true
+          "unit": "%",
+          "answer": 71,
+          "source": "U.S. Geological Survey (USGS)"
         }
       ]
     }

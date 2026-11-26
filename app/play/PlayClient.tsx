@@ -214,6 +214,7 @@ function TeamScreen({ session, onLeave }: { session: Session; onLeave: () => voi
         <Center>
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-gold">Facit</p>
           <p className="font-display text-4xl font-semibold">{state.answer_text}</p>
+          {typeof state.reveal_payload?.source === "string" && <p className="text-xs text-cream/50">Kilde: {state.reveal_payload.source}</p>}
           {myScore ? (
             <p className="animate-pop mt-4 text-3xl font-bold text-gold">{signed(myScore.points)} point</p>
           ) : (

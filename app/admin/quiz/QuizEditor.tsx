@@ -357,7 +357,7 @@ function RoundSettings({ round, onChange, onDelete }: { round: RawRound; onChang
             </Field>
             {round.scoring === "closest" && (
               <>
-                <Field label="Enhed" hint='fx "kr." eller "%"'>
+                <Field label="Standard-enhed" hint="Kan ændres pr. spørgsmål">
                   <input className={input} value={round.unit ?? ""} onChange={(e) => onChange({ unit: e.target.value })} />
                 </Field>
                 <Field label="Point pr. placering" hint="1., 2., 3. plads …">
@@ -509,6 +509,10 @@ function QuestionCard({
         </div>
       </div>
 
+      <Field label="Kilde (valgfri)" hint="Vises under facit på storskærmen, fx “Danmarks Statistik, 2025”">
+        <input className={input} value={typeof q.source === "string" ? q.source : ""} maxLength={200} onChange={(e) => onChange({ source: e.target.value || undefined })} />
+      </Field>
+
       <details className="rounded-xl bg-pine-950/40 p-3">
         <summary className="cursor-pointer text-xs font-semibold uppercase tracking-widest text-cream/50">Ekstra: medie efter facit</summary>
         <div className="mt-3">
@@ -545,12 +549,24 @@ function AnswerField({ round, q, onChange }: { round: RawRound; q: RawQuestion; 
     );
   }
   if (round.answerType === "geo") return <GeoAnswer q={q} onChange={onChange} />;
-  if (round.scoring === "closest")
+  if (round.scoring === "closest") {
+    const unit = typeof q.unit === "string" ? q.unit : (round.unit ?? "");
     return (
-      <Field label={`Facit (tal${round.unit ? `, ${round.unit}` : ""})`}>
-        <NumberInput value={typeof q.answer === "number" ? q.answer : null} onChange={(n) => onChange({ answer: n ?? 0 })} />
-      </Field>
+      <div className="grid grid-cols-[1fr_8rem] gap-3">
+        <Field label={`Facit (tal${unit ? `, ${unit}` : ""})`}>
+          <NumberInput value={typeof q.answer === "number" ? q.answer : null} onChange={(n) => onChange({ answer: n ?? 0 })} />
+        </Field>
+        <Field label="Enhed" hint={round.unit ? `Tom = rundens “${round.unit}”` : "fx %, kr. eller tom"}>
+          <input
+            className={input}
+            value={typeof q.unit === "string" ? q.unit : ""}
+            placeholder={round.unit ?? ""}
+            onChange={(e) => onChange({ unit: e.target.value === "" ? undefined : e.target.value })}
+          />
+        </Field>
+      </div>
     );
+  }
   return (
     <Field label="Facit (vises ved reveal)" hint={round.scoring === "manual-parts" ? `Fx: Titel · Kunstner (dele: ${(round.parts ?? []).join(", ")})` : undefined}>
       <input className={input} value={typeof q.answer === "string" ? q.answer : ""} onChange={(e) => onChange({ answer: e.target.value })} />

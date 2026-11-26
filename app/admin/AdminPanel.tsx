@@ -208,6 +208,7 @@ export function AdminPanel({ quiz, initialGame, teamCodes }: { quiz: Question[];
                   <div className="rounded-xl border border-gold/40 bg-gold/10 px-4 py-3">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-gold">Facit · kun quizmaster</p>
                     <p className="mt-1 text-xl font-semibold text-gold-soft">{META[q.answerType].answerText(q)}</p>
+                    {q.source && <p className="mt-1 text-xs text-cream/50">Kilde: {q.source}</p>}
                   </div>
                   <p className="text-xs text-cream/50">
                     Timer {q.timerSeconds} s · {pointsRule(q)}

@@ -263,6 +263,7 @@ export async function reveal(gameId: string): Promise<Result> {
       answer_text: META[q.answerType].answerText(q),
       reveal_payload: {
         ...META[q.answerType].revealPayload(q),
+        source: q.source,
         ...(q.answerType === "draw" ? { drawCount: await countDrawings(gameId, q.key) } : {}),
       },
       media_command: "stop",
