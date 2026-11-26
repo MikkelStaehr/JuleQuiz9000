@@ -25,7 +25,7 @@ export function formatNumber(n: number, unit?: string | null): string {
 
 export const DEFAULT_LABELS: TrueFalseLabels = { true: "SANDT", false: "FALSK" };
 
-/** Reveal steps for draw: one drawing at a time (zoom) → grid → facit (→ ranking for closest). */
+/** Reveal steps for draw: facit → one drawing at a time (zoom) → grid (→ ranking for closest). */
 export function drawRevealSteps(r: Record<string, unknown> | null) {
   const count = num(r?.drawCount) ? (r!.drawCount as number) : 0;
   return count + 2 + (r?.scoring === "closest" ? 1 : 0);

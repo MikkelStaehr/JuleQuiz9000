@@ -372,9 +372,9 @@ function CountdownView({
   );
 }
 
-/** Reveal step on which the facit appears (draw: after every drawing + the grid). */
+/** Reveal step on which the facit appears. */
 function facitStep(state: GameState) {
-  return state.answer_type === "draw" ? Number(state.reveal_payload?.drawCount ?? 0) + 2 : 2;
+  return state.answer_type === "draw" ? 1 : 2; // drawings: facit first, then the drawings
 }
 
 /** Standings; after the last question of a round the round winner is celebrated first. */

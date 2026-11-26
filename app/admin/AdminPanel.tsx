@@ -111,7 +111,7 @@ export function AdminPanel({ quiz, initialGame, teamCodes }: { quiz: Question[];
   useEffect(() => {
     if (!autoReveal || phase !== "reveal" || !gameId || !q || autoSteps === 0) return;
     const last = autoStep >= autoSteps;
-    const delay = last ? AUTO_MS.last : q.answerType === "draw" && autoStep <= autoDrawCount ? AUTO_MS.drawing : AUTO_MS.step;
+    const delay = last ? AUTO_MS.last : q.answerType === "draw" && autoStep >= 2 && autoStep <= autoDrawCount + 1 ? AUTO_MS.drawing : AUTO_MS.step;
     const id = setTimeout(() => {
       if (last) A.showScoreboard(gameId, qKey);
       else A.advanceReveal(gameId, autoStep);
