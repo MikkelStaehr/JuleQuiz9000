@@ -107,6 +107,55 @@ export function PickMap({
   );
 }
 
+// ───────────────────────── quiz editor (quizmaster) ─────────────────────────
+
+function ViewReporter({ onView }: { onView: (v: MapView) => void }) {
+  useMapEvents({
+    moveend(e) {
+      const m = e.target as L.Map;
+      const c = m.getCenter().wrap();
+      onView({ lat: Math.round(c.lat * 1e4) / 1e4, lng: Math.round(c.lng * 1e4) / 1e4, zoom: m.getZoom() });
+    },
+  });
+  return null;
+}
+
+/** Click to set the facit; reports the current view so it can be saved as mapStart. */
+export function EditorMap({
+  start,
+  facit,
+  onPick,
+  onView,
+}: {
+  start: MapView;
+  facit: { lat: number; lng: number; label?: string } | null;
+  onPick: (p: { lat: number; lng: number }) => void;
+  onView: (v: MapView) => void;
+}) {
+  const icon = useMemo(() => pinIcon("#d9b97a", { facit: true, size: 30, label: facit?.label || undefined }), [facit?.label]);
+  return (
+    <MapContainer center={[start.lat, start.lng]} zoom={start.zoom} worldCopyJump className="h-full w-full">
+      <TileLayer url={TILE_URL} attribution={ATTRIBUTION} maxZoom={19} />
+      <AutoResize />
+      <ClickToPin onPick={onPick} disabled={false} />
+      <ViewReporter onView={onView} />
+      {facit && (
+        <Marker
+          position={[facit.lat, facit.lng]}
+          icon={icon}
+          draggable
+          eventHandlers={{
+            dragend: (e) => {
+              const w = (e.target as L.Marker).getLatLng().wrap();
+              onPick({ lat: w.lat, lng: w.lng });
+            },
+          }}
+        />
+      )}
+    </MapContainer>
+  );
+}
+
 // ───────────────────────── results (display + admin) ─────────────────────────
 
 export interface ResultPin {

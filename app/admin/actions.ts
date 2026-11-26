@@ -8,7 +8,8 @@ import { META } from "@/lib/answerTypes/meta";
 import { scoreQuestion } from "@/lib/answerTypes/scoring";
 import { drawJudgingComplete } from "@/lib/answerTypes/draw/score";
 import type { Question, ScoreAnswer, ScoreResult } from "@/lib/answerTypes/types";
-import { QUIZ, TOTAL_ROUNDS, findQuestion, nextQuestion } from "@/lib/quiz";
+import { findQuestion, getQuiz, nextQuestion, parseQuiz, type Quiz } from "@/lib/quiz";
+import { createMediaUploadUrl, writeQuizContent } from "@/lib/quizStore";
 import { getAdminSupabase } from "@/lib/supabase/admin";
 import type { AnswerValue, MediaCommand } from "@/lib/types";
 
@@ -56,14 +57,14 @@ export async function logout() {
 
 // ───────────── state helpers ─────────────
 
-function questionFields(q: Question) {
+function questionFields(q: Question, quiz: Quiz) {
   return {
     current_round: q.round,
     current_index: q.index,
     question_key: q.key,
     round_title: q.roundTitle,
     round_size: q.roundSize,
-    total_rounds: TOTAL_ROUNDS,
+    total_rounds: quiz.totalRounds,
     point_multiplier: q.pointMultiplier,
     answer_type: q.answerType,
   };
@@ -110,10 +111,12 @@ async function current(gameId: string) {
       .eq("game_id", gameId)
       .single(),
   );
-  const q = findQuestion(data.question_key);
-  if (!q) throw new Error(`Spørgsmålet "${data.question_key}" findes ikke i quiz.json`);
+  const quiz = await getQuiz();
+  const q = findQuestion(quiz, data.question_key);
+  if (!q) throw new Error(`Spørgsmålet "${data.question_key}" findes ikke længere i quizzen – brug "Hop til"`);
   return {
     q,
+    quiz,
     phase: data.phase as string,
     step: data.reveal_step as number,
     revealPayload: data.reveal_payload as Record<string, unknown> | null,
@@ -186,6 +189,8 @@ const NAME = "Den kæmpe store elite jule quiz";
 export async function createGame(teamCount: number, demo: boolean): Promise<Result> {
   return run(async () => {
     const sb = getAdminSupabase();
+    const quiz = await getQuiz();
+    if (!quiz.questions.length) throw new Error("Quizzen har ingen spørgsmål – opret dem under “Rediger quiz”");
     const real = demo ? Math.min(4, Math.max(0, teamCount)) : Math.min(8, Math.max(1, teamCount));
     const total = demo ? 4 + real : real;
     must(await sb.from("games").update({ active: false }).eq("active", true));
@@ -207,7 +212,7 @@ export async function createGame(teamCount: number, demo: boolean): Promise<Resu
         })),
       ),
     );
-    must(await sb.from("game_state").insert({ game_id: game.id, phase: "idle", ...CLEARED, ...questionFields(QUIZ[0]) }));
+    must(await sb.from("game_state").insert({ game_id: game.id, phase: "idle", ...CLEARED, ...questionFields(quiz.questions[0], quiz) }));
     revalidatePath("/admin");
   });
 }
@@ -288,18 +293,19 @@ export async function showScoreboard(gameId: string): Promise<Result> {
 
 export async function next(gameId: string): Promise<Result> {
   return run(async () => {
-    const { q } = await current(gameId);
-    const n = nextQuestion(q.key);
+    const { q, quiz } = await current(gameId).catch(async () => ({ q: null, quiz: await getQuiz() }));
+    const n = q ? nextQuestion(quiz, q.key) : quiz.questions[0];
     if (!n) return patchState(gameId, { ...CLEARED, phase: "finished" });
-    await patchState(gameId, { ...CLEARED, ...questionFields(n), phase: "idle" });
+    await patchState(gameId, { ...CLEARED, ...questionFields(n, quiz), phase: "idle" });
   });
 }
 
 export async function gotoQuestion(gameId: string, key: string): Promise<Result> {
   return run(async () => {
-    const q = findQuestion(key);
+    const quiz = await getQuiz();
+    const q = findQuestion(quiz, key);
     if (!q) throw new Error("Ukendt spørgsmål");
-    await patchState(gameId, { ...CLEARED, ...questionFields(q), phase: "idle" });
+    await patchState(gameId, { ...CLEARED, ...questionFields(q, quiz), phase: "idle" });
   });
 }
 
@@ -316,7 +322,7 @@ export async function mediaCommand(gameId: string, cmd: MediaCommand, seek: numb
 /** Quizmaster override for one team on one question. */
 export async function setScore(gameId: string, teamId: string, qKey: string, points: number): Promise<Result> {
   return run(async () => {
-    const q = findQuestion(qKey);
+    const q = findQuestion(await getQuiz(), qKey);
     if (!q) throw new Error("Ugyldigt spørgsmål");
     if (!Number.isInteger(points) || Math.abs(points) > 50) throw new Error("Point skal være et heltal mellem −50 og 50");
     const sb = getAdminSupabase();
@@ -449,4 +455,22 @@ export async function demoSubmit(
       ),
     );
   });
+}
+
+// ───────────── quiz editor ─────────────
+
+/** Validate with the same rules as the game, then save (with backup). Returns the number of questions. */
+export async function saveQuiz(content: unknown): Promise<Result<number>> {
+  return run(async () => {
+    const questions = parseQuiz(content);
+    if (questions.length === 0) throw new Error("Quizzen skal have mindst ét spørgsmål");
+    await writeQuizContent(content);
+    revalidatePath("/admin");
+    return questions.length;
+  });
+}
+
+/** Signed upload URL for a question image/audio/video (uploaded directly from the browser). */
+export async function createMediaUpload(fileName: string): Promise<Result<{ bucket: string; path: string; token: string; publicUrl: string }>> {
+  return run(async () => createMediaUploadUrl(String(fileName).slice(0, 120)));
 }

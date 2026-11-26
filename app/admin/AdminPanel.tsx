@@ -165,6 +165,7 @@ export function AdminPanel({ quiz, initialGame, teamCodes }: { quiz: Question[];
           </span>
         </div>
         <div className="flex flex-wrap gap-2">
+          <a className="btn btn-ghost" href="/admin/quiz">✎ Rediger quiz</a>
           <a className="btn btn-ghost" href="/display" target="_blank" rel="noreferrer">Storskærm ↗</a>
           <a className="btn btn-ghost" href="/play" target="_blank" rel="noreferrer">Hold-skærm ↗</a>
           <button className="btn btn-ghost" onClick={() => A.logout()}>Log ud</button>
@@ -522,6 +523,7 @@ function Setup({ act, pending, error }: { act: Act; pending: boolean; error: str
         </div>
       </div>
       <p className="text-center text-xs text-cream/40">Et nyt spil afslutter automatisk det aktive spil.</p>
+      <a className="btn btn-ghost mx-auto" href="/admin/quiz">✎ Opret og rediger spørgsmål</a>
     </main>
   );
 }

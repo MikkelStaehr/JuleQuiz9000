@@ -1,5 +1,5 @@
 import "server-only";
-import raw from "@/data/quiz.json";
+import { readQuizContent } from "./quizStore";
 import { DEFAULT_LABELS, META } from "./answerTypes/meta";
 import {
   ANSWER_TYPES,
@@ -23,7 +23,8 @@ const COMMON = new Set(["key", "text", "mediaType", "mediaUrl", "timerSeconds", 
 const isStrList = (v: unknown): v is string[] => Array.isArray(v) && v.every((s) => typeof s === "string");
 const isNumList = (v: unknown): v is number[] => Array.isArray(v) && v.every((n) => typeof n === "number" && Number.isFinite(n));
 
-function load(input: unknown): Question[] {
+/** Validate + resolve quiz content (throws a readable message on the first problem). */
+export function parseQuiz(input: unknown): Question[] {
   const root = input as { rounds?: unknown };
   if (!root || !Array.isArray(root.rounds)) throw new Error("quiz.json: mangler rounds[]");
   const keys = new Set<string>();
@@ -106,12 +107,20 @@ function load(input: unknown): Question[] {
   return out.sort((a, b) => a.round - b.round || a.index - b.index);
 }
 
-export const QUIZ: Question[] = load(raw);
-export const TOTAL_ROUNDS = new Set(QUIZ.map((q) => q.round)).size;
+export interface Quiz {
+  questions: Question[];
+  totalRounds: number;
+}
 
-export const findQuestion = (key: string) => QUIZ.find((q) => q.key === key) ?? null;
+/** The current quiz from Storage (validated). */
+export async function getQuiz(): Promise<Quiz> {
+  const questions = parseQuiz(await readQuizContent());
+  return { questions, totalRounds: new Set(questions.map((q) => q.round)).size };
+}
 
-export function nextQuestion(key: string) {
-  const i = QUIZ.findIndex((q) => q.key === key);
-  return i >= 0 && i + 1 < QUIZ.length ? QUIZ[i + 1] : null;
+export const findQuestion = (quiz: Quiz, key: string) => quiz.questions.find((q) => q.key === key) ?? null;
+
+export function nextQuestion(quiz: Quiz, key: string) {
+  const i = quiz.questions.findIndex((q) => q.key === key);
+  return i >= 0 && i + 1 < quiz.questions.length ? quiz.questions[i + 1] : null;
 }

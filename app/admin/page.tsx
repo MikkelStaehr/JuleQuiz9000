@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { isAdmin } from "@/lib/admin-auth";
 import { getAdminSupabase } from "@/lib/supabase/admin";
-import { QUIZ } from "@/lib/quiz";
+import { getQuiz } from "@/lib/quiz";
 import type { Game, TeamWithCode } from "@/lib/types";
 import { AdminPanel } from "./AdminPanel";
 import { LoginForm } from "./LoginForm";
@@ -41,5 +41,17 @@ async function AdminGate() {
   }
 
   // Full quiz incl. answers is only ever sent to an authenticated quizmaster.
-  return <AdminPanel quiz={QUIZ} initialGame={(game as Game) ?? null} teamCodes={codes} />;
+  let quiz;
+  try {
+    quiz = await getQuiz();
+  } catch (e) {
+    return (
+      <main className="mx-auto max-w-2xl space-y-4 p-10">
+        <h1 className="font-display text-3xl">Quizzen kunne ikke indlæses</h1>
+        <p className="rounded-xl border border-alarm/40 bg-alarm/10 p-4 text-sm">{(e as Error).message}</p>
+        <a className="btn btn-gold" href="/admin/quiz">Åbn quiz-editoren</a>
+      </main>
+    );
+  }
+  return <AdminPanel quiz={quiz.questions} initialGame={(game as Game) ?? null} teamCodes={codes} />;
 }
