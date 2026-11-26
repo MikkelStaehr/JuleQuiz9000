@@ -119,10 +119,20 @@ export interface Quiz {
   totalRounds: number;
 }
 
-/** The current quiz from Storage (validated). */
+const CACHE_MS = 15_000;
+let cache: { at: number; quiz: Quiz } | null = null;
+
+/** The current quiz from Storage (validated). Cached for 15 s per server instance; saveQuiz() clears it. */
 export async function getQuiz(): Promise<Quiz> {
+  if (cache && Date.now() - cache.at < CACHE_MS) return cache.quiz;
   const questions = parseQuiz(await readQuizContent());
-  return { questions, totalRounds: new Set(questions.map((q) => q.round)).size };
+  const quiz = { questions, totalRounds: new Set(questions.map((q) => q.round)).size };
+  cache = { at: Date.now(), quiz };
+  return quiz;
+}
+
+export function invalidateQuizCache() {
+  cache = null;
 }
 
 export const findQuestion = (quiz: Quiz, key: string) => quiz.questions.find((q) => q.key === key) ?? null;

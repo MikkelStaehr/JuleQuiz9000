@@ -370,14 +370,17 @@ export function AdminPanel({ quiz, initialGame, teamCodes }: { quiz: Question[];
                 teams={joined}
                 answers={liveRows}
                 scoreFor={(id) => scoreFor(id, qKey)}
-                pending={pending}
-                onJudge={(teamId, j) =>
-                  act(async () => {
-                    const r = await A.judgeAnswer(game.id, teamId, j);
-                    loadLive();
-                    return r;
-                  })
-                }
+                pending={false}
+                onJudge={async (teamId, j) => {
+                  // optimistic: the field already shows the value; save in the background without locking the panel
+                  setLive((cur) => ({
+                    ...cur,
+                    rows: cur.rows.map((r) => (r.team_id === teamId ? { ...r, judgment: { ...(r.judgment ?? {}), ...j } } : r)),
+                  }));
+                  const r = await A.judgeAnswer(game.id, teamId, j);
+                  if (!r.ok) setError(r.error);
+                  loadLive();
+                }}
               />
             </div>
           )}

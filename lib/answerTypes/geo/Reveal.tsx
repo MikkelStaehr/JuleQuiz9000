@@ -50,7 +50,7 @@ export default function GeoReveal({ q, reveal, step, teams, answers, scoreFor, t
           showLines={step >= 3}
         />
         {step >= 2 && (
-          <div className="animate-pop absolute bottom-[2vh] left-1/2 z-[500] -translate-x-1/2 rounded-full bg-gold px-[2vw] py-[1vh] text-[2vw] font-bold text-ink shadow-xl">
+          <div className="fun-drop-in absolute bottom-[3vh] left-1/2 z-[500] -translate-x-1/2 whitespace-nowrap rounded-[1.6vmin] bg-gold px-[4vmin] py-[1.2vmin] text-[min(4.5vw,6.5vh)] font-black text-ink shadow-[0_0_6vmin_rgba(217,185,122,0.6)]">
             📍 {facit.label}
           </div>
         )}

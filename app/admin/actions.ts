@@ -8,7 +8,7 @@ import { META } from "@/lib/answerTypes/meta";
 import { scoreQuestion } from "@/lib/answerTypes/scoring";
 import { drawJudgingComplete } from "@/lib/answerTypes/draw/score";
 import type { Question, ScoreAnswer, ScoreResult } from "@/lib/answerTypes/types";
-import { findQuestion, getQuiz, nextQuestion, parseQuiz, type Quiz } from "@/lib/quiz";
+import { findQuestion, getQuiz, invalidateQuizCache, nextQuestion, parseQuiz, type Quiz } from "@/lib/quiz";
 import { createMediaUploadUrl, writeQuizContent } from "@/lib/quizStore";
 import { getAdminSupabase } from "@/lib/supabase/admin";
 import type { AnswerValue, MediaCommand } from "@/lib/types";
@@ -533,6 +533,7 @@ export async function saveQuiz(content: unknown): Promise<Result<number>> {
     const questions = parseQuiz(content);
     if (questions.length === 0) throw new Error("Quizzen skal have mindst ét spørgsmål");
     await writeQuizContent(content);
+    invalidateQuizCache();
     revalidatePath("/admin");
     return questions.length;
   });

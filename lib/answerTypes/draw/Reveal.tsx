@@ -78,7 +78,10 @@ export default function DrawReveal({ reveal, answerText, step, teams, answers, s
     );
     return (
       <div className="flex w-full flex-1 flex-col items-center justify-center gap-[2vh]">
-        <p className="rounded-full bg-gold px-[2vw] py-[0.8vh] text-[2vw] font-bold text-ink">Facit: {answerText}</p>
+        <p className="rounded-[1.4vmin] bg-gold px-[3vmin] py-[1vmin] text-[min(5vw,7vh)] font-black leading-tight text-ink">
+          <span className="mr-[2vmin] align-middle text-[min(1.8vw,2.6vh)] font-semibold uppercase tracking-[0.25em]">Facit</span>
+          {answerText}
+        </p>
         <ol className="animate-fade-up grid w-[80vw] grid-cols-2 gap-x-[2vw] gap-y-[1vh]">
           {ranked.map((r) => {
             const t = teams.find((x) => x.id === r.teamId)!;
@@ -110,9 +113,9 @@ export default function DrawReveal({ reveal, answerText, step, teams, answers, s
   const cardW = `((${(66 / rows).toFixed(2)}vh - 7vh) / 0.7)`;
   return (
     <div className="flex min-h-0 w-full flex-1 flex-col items-center gap-[2vh] px-[3vw] pb-[3vh]">
-      <div className={`rounded-[1.2vmin] px-[2.4vw] py-[1vh] ${showFacit ? "animate-pop bg-gold text-ink" : "invisible"}`}>
-        <span className="mr-[1vw] text-[1.2vw] font-semibold uppercase tracking-[0.25em]">Facit</span>
-        <span className="text-[2.6vw] font-black">{answerText}</span>
+      <div className={`rounded-[1.6vmin] px-[4vmin] py-[1.4vmin] text-center ${showFacit ? "fun-drop-in bg-gold text-ink shadow-[0_0_6vmin_rgba(217,185,122,0.5)]" : "hidden"}`}>
+        <span className="block text-[min(1.8vw,2.6vh)] font-semibold uppercase tracking-[0.3em]">Facit</span>
+        <span className="block text-[min(8vw,11vh)] font-black leading-none">{answerText}</span>
       </div>
       {n === 0 && <p className="text-[2vw] text-cream/50">Ingen tegninger afleveret</p>}
       <div

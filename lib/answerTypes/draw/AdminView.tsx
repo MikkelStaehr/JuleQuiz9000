@@ -129,10 +129,17 @@ function ClosestControls({
           inputMode="decimal"
           placeholder="Aflæst værdi"
           aria-label={`Aflæst værdi for ${team.name}`}
-          disabled={pending || judgment.invalid}
+          disabled={judgment.invalid}
           onChange={(e) => setText(formatDanishInput(e.target.value).text)}
           onBlur={commit}
-          onKeyDown={(e) => e.key === "Enter" && (e.currentTarget as HTMLInputElement).blur()}
+          data-read-input
+          onKeyDown={(e) => {
+            if (e.key !== "Enter") return;
+            const all = [...document.querySelectorAll<HTMLInputElement>("[data-read-input]:not(:disabled)")];
+            const next = all[all.indexOf(e.currentTarget) + 1];
+            if (next) next.focus();
+            else e.currentTarget.blur();
+          }}
           className="tabular min-w-0 flex-1 bg-transparent text-right text-sm font-semibold outline-none"
         />
         {unit && <span className="text-xs text-gold">{unit}</span>}

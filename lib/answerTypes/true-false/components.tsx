@@ -119,9 +119,9 @@ export function TrueFalseReveal({ reveal, answerText, step, teams, answers, scor
 
   return (
     <div className="flex w-full flex-1 flex-col items-center justify-center gap-[3vh]">
-      <div className={`rounded-[1.2vmin] px-[3vw] py-[1.4vh] ${step >= 2 ? "animate-pop bg-gold text-ink" : "invisible"}`}>
-        <span className="mr-[1vw] text-[1.3vw] font-semibold uppercase tracking-[0.25em]">Facit</span>
-        <span className="text-[3vw] font-black tracking-wider">{answerText}</span>
+      <div className={`rounded-[1.6vmin] px-[4vmin] py-[1.4vmin] text-center ${step >= 2 ? "fun-drop-in bg-gold text-ink shadow-[0_0_6vmin_rgba(217,185,122,0.5)]" : "invisible"}`}>
+        <span className="block text-[min(1.8vw,2.6vh)] font-semibold uppercase tracking-[0.3em]">Facit</span>
+        <span className="block text-[min(8vw,11vh)] font-black leading-none tracking-wider">{answerText}</span>
       </div>
       <div className="grid w-[88vw] gap-[1.6vw]" style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}>
         {teams.map((t, i) => {
