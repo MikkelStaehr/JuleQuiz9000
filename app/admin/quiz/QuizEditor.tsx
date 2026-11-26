@@ -434,25 +434,42 @@ function Toggle({ label, checked, onChange }: { label: string; checked: boolean;
   );
 }
 
+/** Danish number parsing: "50,73%" → 50.73 · "1.200 kr." → 1200 · "-31,2" → -31.2 (units are ignored). */
+export function parseDanishNumber(text: string): number | null {
+  const raw = text
+    .replace(/[^\d,.\-]/g, "") // drop units, spaces, %
+    .replace(/\.(?=\d{3}(\D|$))/g, "") // thousands separators
+    .replace(",", ".");
+  if (!raw || raw === "-" || raw === ".") return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
+
 function NumberInput({ value, onChange, integer = false, placeholder }: { value: number | undefined | null; onChange: (n: number | null) => void; integer?: boolean; placeholder?: string }) {
   const [text, setText] = useState(value === undefined || value === null ? "" : String(value).replace(".", ","));
+  const [bad, setBad] = useState(false);
   return (
-    <input
-      className={`${input} tabular`}
-      inputMode={integer ? "numeric" : "decimal"}
-      value={text}
-      placeholder={placeholder}
-      onChange={(e) => setText(e.target.value)}
-      onBlur={() => {
-        const raw = text.trim().replace(/\s/g, "").replace(/\.(?=\d{3}(\D|$))/g, "").replace(",", ".");
-        if (!raw) return onChange(null);
-        const n = integer ? Math.round(Number(raw)) : Number(raw);
-        if (Number.isFinite(n)) {
+    <>
+      <input
+        className={`${input} tabular ${bad ? "border-alarm" : ""}`}
+        inputMode={integer ? "numeric" : "decimal"}
+        value={text}
+        placeholder={placeholder}
+        onChange={(e) => {
+          setText(e.target.value);
+          setBad(false);
+        }}
+        onBlur={() => {
+          if (!text.trim()) return onChange(null);
+          const p = parseDanishNumber(text);
+          if (p === null) return setBad(true);
+          const n = integer ? Math.round(p) : p;
           onChange(n);
           setText(String(n).replace(".", ","));
-        }
-      }}
-    />
+        }}
+      />
+      {bad && <span className="block text-xs text-[#ffb4b6]">Skriv kun et tal (fx 50,73) – enheden skrives i feltet “Enhed”</span>}
+    </>
   );
 }
 
