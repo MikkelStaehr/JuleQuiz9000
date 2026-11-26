@@ -81,19 +81,20 @@ export function useGame(gameId: string | null | undefined) {
     setScores((data as Score[]) ?? []);
   }, [gameId]);
 
+  const loadTeams = useCallback(async () => {
+    if (!gameId) return;
+    const { data } = await getSupabase().from("teams").select(TEAM_COLUMNS).eq("game_id", gameId).order("slot");
+    setTeams((data as Team[]) ?? []);
+  }, [gameId]);
+
   const loadAll = useCallback(async () => {
     if (!gameId) return;
-    const sb = getSupabase();
-    const [s, t] = await Promise.all([
-      sb.from("game_state").select("*").eq("game_id", gameId).maybeSingle(),
-      sb.from("teams").select(TEAM_COLUMNS).eq("game_id", gameId).order("slot"),
-    ]);
-    const gs = (s.data as GameState) ?? null;
+    const { data } = await getSupabase().from("game_state").select("*").eq("game_id", gameId).maybeSingle();
+    const gs = (data as GameState) ?? null;
     setState(gs);
-    setTeams((t.data as Team[]) ?? []);
     qKeyRef.current = gs?.question_key ?? null;
-    await Promise.all([loadAnswers(gs?.question_key ?? null), loadScores()]);
-  }, [gameId, loadAnswers, loadScores]);
+    await Promise.all([loadTeams(), loadAnswers(gs?.question_key ?? null), loadScores()]);
+  }, [gameId, loadAnswers, loadScores, loadTeams]);
 
   useEffect(() => {
     if (!gameId) return;
@@ -107,7 +108,9 @@ export function useGame(gameId: string | null | undefined) {
         setState(gs);
         qKeyRef.current = gs.question_key;
         loadAnswers(gs.question_key); // question changed / answers cleared
-        loadScores(); // filtered DELETE events aren't delivered by Realtime → refetch on every state change
+        // filtered DELETE events aren't delivered by Realtime → refetch scores + teams on every state change
+        loadScores();
+        loadTeams();
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "teams", filter }, (p) => {
         const t = p.new as Team;
@@ -139,7 +142,7 @@ export function useGame(gameId: string | null | undefined) {
       document.removeEventListener("visibilitychange", onVis);
       sb.removeChannel(ch);
     };
-  }, [gameId, loadAll, loadAnswers, loadScores]);
+  }, [gameId, loadAll, loadAnswers, loadScores, loadTeams]);
 
   // Never expose data from a previous game while switching.
   const cur = useMemo(

@@ -87,8 +87,9 @@ export function AdminPanel({ quiz, initialGame, teamCodes }: { quiz: Question[];
 
   // ── demo: the simulated teams answer (and sometimes change their mind) ──
   const demoDone = useRef(new Set<string>());
+  const demoCount = teams.filter((t) => t.is_demo).length;
   useEffect(() => {
-    if (!game?.is_demo || !gameId || !state || !q) return;
+    if (!demoCount || !gameId || !state || !q) return;
     if (phase !== "countdown" && phase !== "locked") return;
     const demoTeams = teams.filter((t) => t.is_demo);
     const left = state.timer_ends_at ? Math.max(0, Date.parse(state.timer_ends_at) - serverNow()) : 0;
@@ -123,7 +124,7 @@ export function AdminPanel({ quiz, initialGame, teamCodes }: { quiz: Question[];
     });
     return () => timers.forEach(clearTimeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [game?.is_demo, gameId, phase, qKey, teams.length, state?.timer_ends_at]);
+  }, [demoCount, gameId, phase, qKey, teams.length, state?.timer_ends_at]);
 
   if (!game) return <Setup act={act} pending={pending} error={error} />;
 
@@ -158,7 +159,7 @@ export function AdminPanel({ quiz, initialGame, teamCodes }: { quiz: Question[];
       <header className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-4">
           <Wordmark size="sm" />
-          <span className="rounded-full border border-gold/30 px-3 py-1 text-xs text-gold-soft">{game.is_demo ? "DEMO-MODE" : "Live"}</span>
+          <span className="rounded-full border border-gold/30 px-3 py-1 text-xs text-gold-soft">{game.is_demo ? "DEMO-MODE" : demoCount ? `Live · ${demoCount} demo-hold` : "Live"}</span>
           <span className="flex items-center gap-1.5 text-xs text-cream/60">
             <span className={`h-2 w-2 rounded-full ${connected ? "bg-emerald-400" : "animate-pulse bg-alarm"}`} />
             {connected ? "Realtime forbundet" : "Forbinder…"}
@@ -294,27 +295,15 @@ export function AdminPanel({ quiz, initialGame, teamCodes }: { quiz: Question[];
 
         {/* ───────── right: teams, live answers, points ───────── */}
         <section className="space-y-5">
-          <div className="card-dark p-5">
-            <div className="mb-3 flex items-baseline justify-between">
-              <h2 className="font-display text-2xl">Hold</h2>
-              <span className="text-xs text-cream/50">
-                {answers.length}/{joined.length} har svaret
-              </span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {teams.map((t) => (
-                <span
-                  key={t.id}
-                  className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-sm ${answeredIds.has(t.id) ? "bg-gold text-ink" : "border border-gold/25"}`}
-                >
-                  <span className="h-2.5 w-2.5 rounded-full" style={{ background: teamColor(t.slot) }} />
-                  {t.name ?? <span className="text-cream/40">ledig plads</span>}
-                  {!t.is_demo && <span className="tabular font-mono text-xs font-bold tracking-widest opacity-70">{codeById.get(t.id) ?? "····"}</span>}
-                  {answeredIds.has(t.id) && "✓"}
-                </span>
-              ))}
-            </div>
-          </div>
+          <TeamsPanel
+            gameId={game.id}
+            teams={teams}
+            codeById={codeById}
+            answeredIds={answeredIds}
+            totals={totals}
+            act={act}
+            pending={pending}
+          />
 
           {q && AdminView && (
             <div className="card-dark p-5">
@@ -373,6 +362,94 @@ function pointsRule(q: Question) {
   if (q.answerType === "geo" || q.scoring === "closest") return `tættest: ${q.pointsByRank.join("/")}${m}`;
   if (q.scoring === "manual-parts") return `${q.pointsCorrect} pr. del (${q.parts.join(", ")})${m}`;
   return `manuelt ${q.manualPoints.join("/")}${m}`;
+}
+
+/** Teams: join codes, status, add (real or demo) and remove. */
+function TeamsPanel({
+  gameId,
+  teams,
+  codeById,
+  answeredIds,
+  totals,
+  act,
+  pending,
+}: {
+  gameId: string;
+  teams: { id: string; name: string | null; slot: number; is_demo: boolean; joined_at: string | null }[];
+  codeById: Map<string, string>;
+  answeredIds: Set<string>;
+  totals: Map<string, number>;
+  act: Act;
+  pending: boolean;
+}) {
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!confirmId) return;
+    const id = setTimeout(() => setConfirmId(null), 4000);
+    return () => clearTimeout(id);
+  }, [confirmId]);
+  const joined = teams.filter((t) => t.name).length;
+  const full = teams.length >= 8;
+
+  return (
+    <div className="card-dark p-5">
+      <div className="mb-3 flex items-baseline justify-between">
+        <h2 className="font-display text-2xl">Hold</h2>
+        <span className="text-xs text-cream/50">
+          {joined} tilmeldt · {teams.length}/8 pladser · {answeredIds.size} har svaret
+        </span>
+      </div>
+      <ul className="divide-y divide-gold/10">
+        {teams.map((t) => (
+          <li key={t.id} className="flex items-center gap-3 py-2 text-sm">
+            <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: teamColor(t.slot) }} />
+            <span className="min-w-0 flex-1 truncate">
+              {t.name ? <span className="font-semibold">{t.name}</span> : <span className="text-cream/40">Ledig plads – venter på hold</span>}
+              {t.is_demo && <span className="ml-2 rounded bg-gold/15 px-1.5 py-0.5 text-[10px] uppercase text-gold">demo</span>}
+            </span>
+            {!t.is_demo && (
+              <span className="tabular rounded-md bg-pine-950/70 px-2 py-0.5 font-mono text-base font-bold tracking-[0.25em] text-gold" title="Holdets kode til /play">
+                {codeById.get(t.id) ?? "····"}
+              </span>
+            )}
+            <span className="tabular w-12 text-right text-xs text-cream/50">{totals.get(t.id) ?? 0} p</span>
+            <span className={`w-5 text-center ${answeredIds.has(t.id) ? "text-gold" : "text-transparent"}`} title="Har svaret">
+              ✓
+            </span>
+            {confirmId === t.id ? (
+              <button
+                className="btn btn-danger bg-alarm/20 px-2.5 py-1 text-xs"
+                disabled={pending}
+                onClick={() => {
+                  setConfirmId(null);
+                  act(() => A.removeTeam(gameId, t.id));
+                }}
+              >
+                Bekræft – slet svar og point
+              </button>
+            ) : (
+              <button className="btn btn-ghost px-2.5 py-1 text-xs" disabled={pending} onClick={() => setConfirmId(t.id)}>
+                Fjern
+              </button>
+            )}
+          </li>
+        ))}
+        {teams.length === 0 && <li className="py-2 text-sm text-cream/40">Ingen hold endnu</li>}
+      </ul>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button className="btn btn-gold" disabled={pending || full} onClick={() => act(() => A.addTeam(gameId, false))}>
+          + Tilføj hold
+        </button>
+        <button className="btn btn-ghost" disabled={pending || full} onClick={() => act(() => A.addTeam(gameId, true))} title="Simuleret hold, der svarer automatisk – til test">
+          + Demo-hold
+        </button>
+        {full && <span className="self-center text-xs text-cream/40">Maks 8 hold</span>}
+      </div>
+      <p className="mt-2 text-xs text-cream/40">
+        Nye hold får en kode, som de bruger på <span className="text-cream/60">/play</span>. Demo-hold svarer automatisk og kan fjernes igen efter testen.
+      </p>
+    </div>
+  );
 }
 
 function MediaControls({ gameId, state, act }: { gameId: string; state: { media_command: string; media_type: string }; act: Act }) {

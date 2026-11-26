@@ -217,6 +217,53 @@ export async function createGame(teamCount: number, demo: boolean): Promise<Resu
   });
 }
 
+// ───────────── teams ─────────────
+
+const MORE_DEMO_NAMES = ["Glöggholmerne", "Kravlenisserne", "Team Brunkage", "Julehjerterne"];
+
+/** Add a team slot (max 8) with a fresh 4-digit code – or a simulated demo team. */
+export async function addTeam(gameId: string, demo = false): Promise<Result> {
+  return run(async () => {
+    const sb = getAdminSupabase();
+    const { data: teams } = must(await sb.from("teams").select("slot, join_code, name").eq("game_id", gameId));
+    if (teams.length >= 8) throw new Error("Der kan højst være 8 hold");
+    const used = new Set(teams.map((t) => t.slot as number));
+    const slot = [1, 2, 3, 4, 5, 6, 7, 8].find((s) => !used.has(s))!;
+    const codes = new Set(teams.map((t) => t.join_code as string));
+    let code = "";
+    do code = String(randomInt(1000, 10000));
+    while (codes.has(code));
+    const names = new Set(teams.map((t) => t.name as string | null));
+    const name = demo ? ([...DEMO_NAMES, ...MORE_DEMO_NAMES].find((n) => !names.has(n)) ?? `Demohold ${slot}`) : null;
+    must(
+      await sb.from("teams").insert({
+        game_id: gameId,
+        slot,
+        join_code: code,
+        is_demo: demo,
+        name,
+        joined_at: demo ? new Date().toISOString() : null,
+      }),
+    );
+    revalidatePath("/admin"); // new join code → refresh server-rendered codes
+  });
+}
+
+/** Remove a team (its answers and points are deleted too). */
+export async function removeTeam(gameId: string, teamId: string): Promise<Result> {
+  return run(async () => {
+    const sb = getAdminSupabase();
+    const { data: team } = must(await sb.from("teams").select("game_id").eq("id", teamId).single());
+    if (team.game_id !== gameId) throw new Error("Holdet hører ikke til dette spil");
+    const { data: drawings } = await sb.from("answers").select("value").eq("team_id", teamId);
+    const paths = (drawings ?? []).map((a) => (a.value as { path?: string } | null)?.path).filter((p): p is string => !!p);
+    if (paths.length) await sb.storage.from("answers").remove(paths);
+    must(await sb.from("teams").delete().eq("id", teamId)); // answers + scores cascade
+    await patchState(gameId, {}); // bump → every screen refetches teams (filtered DELETEs aren't sent by Realtime)
+    revalidatePath("/admin");
+  });
+}
+
 export async function endGame(gameId: string): Promise<Result> {
   return run(async () => {
     must(await getAdminSupabase().from("games").update({ active: false }).eq("id", gameId));
