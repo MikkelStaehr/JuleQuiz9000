@@ -109,8 +109,10 @@ export function AdminPanel({ quiz, initialGame, teamCodes }: { quiz: Question[];
   const autoSteps = q && phase === "reveal" ? META[q.answerType].revealSteps(state?.reveal_payload ?? null) : 0;
   const autoDrawCount = Number(state?.reveal_payload?.drawCount ?? 0);
   useEffect(() => {
-    if (!autoReveal || phase !== "reveal" || !gameId || !q || autoSteps === 0) return;
+    if (phase !== "reveal" || !gameId || !q || autoSteps === 0) return;
     const last = autoStep >= autoSteps;
+    // the last step ALWAYS moves on to the standings; the toggle only decides whether earlier steps advance by themselves
+    if (!autoReveal && !last) return;
     const delay = last ? AUTO_MS.last : q.answerType === "draw" && autoStep >= 2 && autoStep <= autoDrawCount + 1 ? AUTO_MS.drawing : AUTO_MS.step;
     const id = setTimeout(() => {
       if (last) A.showScoreboard(gameId, qKey);
@@ -304,9 +306,9 @@ export function AdminPanel({ quiz, initialGame, teamCodes }: { quiz: Question[];
               <input type="checkbox" className="h-4 w-4 accent-[#d9b97a]" checked={autoReveal} onChange={(e) => toggleAuto(e.target.checked)} />
               <span>
                 <b>Automatisk afsløring</b>
-                <span className="text-cream/50"> – “Vis svar” kører alle trin og slutter på stillingen</span>
+                <span className="text-cream/50"> – trinene kører af sig selv (sidste trin går altid til stillingen efter 6 sek.)</span>
               </span>
-              {autoReveal && phase === "reveal" && (
+              {phase === "reveal" && (autoReveal || step >= steps) && (
                 <span className="ml-auto rounded-full bg-gold/15 px-2 py-0.5 text-xs text-gold">
                   {step >= steps ? "stilling om lidt…" : `trin ${step}/${steps} kører…`}
                 </span>
@@ -430,7 +432,7 @@ export function AdminPanel({ quiz, initialGame, teamCodes }: { quiz: Question[];
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
 
 /** Automatic reveal timing (ms): per drawing shown one at a time · other steps · last step before the scoreboard. */
-const AUTO_MS = { drawing: 3500, step: 4500, last: 7000 };
+const AUTO_MS = { drawing: 3500, step: 4500, last: 6000 };
 
 function pointsRule(q: Question) {
   const m = q.pointMultiplier > 1 ? ` × ${q.pointMultiplier}` : "";
