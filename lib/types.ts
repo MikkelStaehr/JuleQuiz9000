@@ -1,44 +1,8 @@
+import type { AnswerTypeId, MediaType, PublicQuestion } from "./answerTypes/types";
+
 export type Phase = "idle" | "question" | "countdown" | "locked" | "reveal" | "scoreboard" | "finished";
-export type MediaType = "none" | "image" | "audio" | "video";
 export type MediaCommand = "play" | "pause" | "stop";
-
-export type Scoring = "manual" | "closest";
-export type CanvasBackground = "blank" | "scale";
-
-/** One question in /data/quiz.json (`questions`). */
-export interface QuizQuestion {
-  round: number;
-  roundTitle: string;
-  index: number;
-  text: string;
-  mediaType: MediaType;
-  mediaUrl: string | null;
-  answer: string;
-  timerSeconds: number;
-  /** Only "draw" for now – teams can only draw. */
-  answerType: "draw";
-  /** "scale" when scaleMin/scaleMax/unit are given, otherwise "blank" (can be overridden). */
-  canvasBackground: CanvasBackground;
-  scaleMin: number | null;
-  scaleMax: number | null;
-  unit: string | null;
-  /** Numeric facit for scale questions (used for the reveal marker and "closest" scoring). */
-  answerValue: number | null;
-  /** Resolved from the round (question may override). */
-  scoring: Scoring;
-  pointMultiplier: number;
-  /** Base points for 1st/2nd/3rd closest (before multiplier). */
-  closestPoints: number[];
-}
-
-/** Optional per-round settings in /data/quiz.json (`rounds`). */
-export interface RoundConfig {
-  round: number;
-  title?: string;
-  scoring?: Scoring;
-  pointMultiplier?: number;
-  closestPoints?: number[];
-}
+export type ScoreSource = "auto" | "approved" | "manual";
 
 export interface Game {
   id: string;
@@ -71,40 +35,70 @@ export interface GameState {
   total_rounds: number;
   round_size: number;
   round_title: string | null;
+  point_multiplier: number;
+  answer_type: AnswerTypeId;
+  // shown question (no facit) – copied in by the quizmaster
   question_text: string | null;
   media_type: MediaType;
   media_url: string | null;
+  show_text_on_play: boolean;
+  public_payload: Record<string, unknown>;
+  // reveal
   answer_text: string | null;
+  reveal_payload: Record<string, unknown> | null;
+  reveal_step: number;
+  // timer + media
   timer_seconds: number | null;
   timer_ends_at: string | null;
   media_command: MediaCommand;
   media_command_at: string | null;
+  media_seek: number | null;
   updated_at: string;
-  scoring: Scoring;
-  point_multiplier: number;
-  canvas_background: CanvasBackground;
-  scale_min: number | null;
-  scale_max: number | null;
-  scale_unit: string | null;
-  answer_value: number | null;
 }
 
-export interface Scale {
-  min: number;
-  max: number;
-  unit: string;
+/** What clients may read: THAT a team answered – never the value (until revealed_answers()). */
+export interface AnswerStatus {
+  id: string;
+  game_id: string;
+  team_id: string;
+  question_key: string;
+  submitted_at: string;
 }
 
-export function stateScale(s: Pick<GameState, "canvas_background" | "scale_min" | "scale_max" | "scale_unit"> | null): Scale | null {
-  if (!s || s.canvas_background !== "scale" || s.scale_min === null || s.scale_max === null) return null;
-  return { min: s.scale_min, max: s.scale_max, unit: s.scale_unit ?? "" };
+/** Full answer (revealed_answers() after reveal, or server-side for the quizmaster). */
+export interface AnswerValue {
+  team_id: string;
+  value: unknown;
+  wager: number | null;
+  /** Quizmaster's judgment of a drawing: {read, invalid} · {parts} · {points} */
+  judgment?: Record<string, unknown> | null;
+  submitted_at: string;
 }
 
-export function formatScaleValue(v: number, scale: Scale) {
-  const range = Math.abs(scale.max - scale.min);
-  const decimals = range <= 10 ? 1 : 0;
-  const n = v.toLocaleString("da-DK", { maximumFractionDigits: decimals, minimumFractionDigits: 0 });
-  return scale.unit ? `${n} ${scale.unit}` : n;
+export interface Score {
+  game_id: string;
+  team_id: string;
+  question_key: string;
+  round: number | null;
+  points: number;
+  detail: Record<string, unknown> | null;
+  source: ScoreSource;
+}
+
+export const TEAM_COLUMNS = "id, game_id, slot, name, joined_at, is_demo";
+export const ANSWER_COLUMNS = "id, game_id, team_id, question_key, submitted_at";
+export const SCORE_COLUMNS = "game_id, team_id, question_key, round, points, detail, source";
+
+export function publicQuestion(s: GameState): PublicQuestion {
+  return {
+    key: s.question_key,
+    answerType: s.answer_type,
+    text: s.question_text ?? "",
+    mediaType: s.media_type,
+    mediaUrl: s.media_url,
+    showTextOnPlay: s.show_text_on_play,
+    payload: s.public_payload ?? {},
+  };
 }
 
 export function multiplierLabel(m: number) {
@@ -115,29 +109,4 @@ export function multiplierLabel(m: number) {
 export const TEAM_COLORS = ["#ff6b6b", "#4dabf7", "#ffa94d", "#b197fc", "#38d9a9", "#f783ac", "#a9e34b", "#f8f9fa"];
 export const teamColor = (slot: number) => TEAM_COLORS[(slot - 1) % TEAM_COLORS.length];
 
-export interface Answer {
-  id: string;
-  game_id: string;
-  team_id: string;
-  question_key: string;
-  image_path: string;
-  submitted_at: string;
-  scale_value: number | null;
-}
-
-export interface Score {
-  game_id: string;
-  team_id: string;
-  question_key: string;
-  points: number;
-}
-
-export const TEAM_COLUMNS = "id, game_id, slot, name, joined_at, is_demo";
-
-export function questionKey(round: number, index: number) {
-  return `r${round}-q${index}`;
-}
-
-export function answerPath(gameId: string, qKey: string, teamId: string) {
-  return `${gameId}/${qKey}/${teamId}.png`;
-}
+export const signed = (n: number) => (n > 0 ? `+${n}` : `${n}`);

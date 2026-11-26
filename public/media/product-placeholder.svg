@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 900" width="1200" height="900">
+  <rect width="1200" height="900" fill="#f4efe6"/>
+  <path d="M420 230 L520 180 Q600 230 680 180 L780 230 L860 360 L780 400 L760 360 L760 720 L440 720 L440 360 L420 400 L340 360 Z" fill="#b3202a"/>
+  <path d="M480 420 L720 420 M480 470 L720 470" stroke="#fff" stroke-width="14" stroke-dasharray="20 14"/>
+  <path d="M600 520 l-60 90 h120 z" fill="#1d6b3a"/><circle cx="600" cy="505" r="14" fill="#f2c94c"/>
+  <rect x="0" y="790" width="1200" height="110" fill="rgba(0,0,0,0.5)"/>
+  <text x="600" y="860" font-family="Arial, sans-serif" font-size="40" fill="#fff" text-anchor="middle">EKSEMPEL – indsæt jeres eget produktbillede</text>
+</svg>

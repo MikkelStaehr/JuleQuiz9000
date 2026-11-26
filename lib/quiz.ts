@@ -1,112 +1,117 @@
 import "server-only";
 import raw from "@/data/quiz.json";
-import { questionKey, type QuizQuestion, type RoundConfig, type Scoring } from "./types";
+import { DEFAULT_LABELS, META } from "./answerTypes/meta";
+import {
+  ANSWER_TYPES,
+  DRAW_SCORINGS,
+  type AnswerTypeId,
+  type DrawScoring,
+  type MediaType,
+  type Question,
+  type TrueFalseLabels,
+} from "./answerTypes/types";
 
 /**
- * /data/quiz.json is either a flat array of questions (legacy) or
- * { rounds: RoundConfig[], questions: Question[] }.
- * Round settings (scoring, pointMultiplier, closestPoints) apply to all questions in the round;
- * a question may override them.
+ * /data/quiz.json
+ * { rounds: [{ number, title, answerType, pointMultiplier?, defaultTimerSeconds?, pointsByRank?, pointsCorrect?,
+ *              scoring? (draw), unit?, parts?, manualPoints?, labels? (true-false), wagerEnabled?, questions: [...] }] }
+ * question: { key, text, mediaType, mediaUrl, timerSeconds?, answer, showTextOnPlay?, revealMediaUrl?, ...type-specific }
+ * unit / parts may also be set per question.
  */
-function load(input: unknown): QuizQuestion[] {
-  const obj = Array.isArray(input) ? { rounds: [], questions: input } : (input as { rounds?: unknown; questions?: unknown });
-  if (!obj || !Array.isArray(obj.questions)) throw new Error("quiz.json: mangler questions[]");
-  const rounds = new Map<number, RoundConfig>();
-  for (const r of (obj.rounds as RoundConfig[] | undefined) ?? []) {
-    if (!Number.isInteger(r.round)) throw new Error("quiz.json rounds: round mangler");
-    if (r.scoring && !["manual", "closest"].includes(r.scoring)) throw new Error(`quiz.json runde ${r.round}: scoring`);
-    if (r.pointMultiplier !== undefined && !(Number.isInteger(r.pointMultiplier) && r.pointMultiplier >= 1 && r.pointMultiplier <= 5))
-      throw new Error(`quiz.json runde ${r.round}: pointMultiplier skal være 1–5`);
-    rounds.set(r.round, r);
-  }
+const COMMON = new Set(["key", "text", "mediaType", "mediaUrl", "timerSeconds", "answer", "showTextOnPlay", "revealMediaUrl", "unit", "parts"]);
 
-  const seen = new Set<string>();
-  const out = obj.questions.map((q, i): QuizQuestion => {
-    const e = (msg: string) => new Error(`quiz.json questions[${i}]: ${msg}`);
-    if (typeof q !== "object" || q === null) throw e("ikke et objekt");
-    const x = q as Record<string, unknown>;
-    if (!Number.isInteger(x.round) || (x.round as number) < 1) throw e("round");
-    if (!Number.isInteger(x.index) || (x.index as number) < 1) throw e("index");
-    if (typeof x.text !== "string" || !x.text) throw e("text");
-    if (typeof x.answer !== "string") throw e("answer");
-    if (!["none", "image", "audio", "video"].includes(x.mediaType as string)) throw e("mediaType");
-    if (x.mediaType !== "none" && typeof x.mediaUrl !== "string") throw e("mediaUrl mangler");
-    if (!Number.isInteger(x.timerSeconds) || (x.timerSeconds as number) < 5) throw e("timerSeconds");
-    if (x.answerType !== undefined && x.answerType !== "draw") throw e('answerType skal være "draw"');
-    const key = questionKey(x.round as number, x.index as number);
-    if (seen.has(key)) throw e(`dublet ${key}`);
-    seen.add(key);
+const isStrList = (v: unknown): v is string[] => Array.isArray(v) && v.every((s) => typeof s === "string");
+const isNumList = (v: unknown): v is number[] => Array.isArray(v) && v.every((n) => typeof n === "number" && Number.isFinite(n));
 
-    const hasScale = typeof x.scaleMin === "number" && typeof x.scaleMax === "number";
-    if (hasScale && (x.scaleMin as number) >= (x.scaleMax as number)) throw e("scaleMin skal være < scaleMax");
-    const bg = (x.canvasBackground as string | undefined) ?? (hasScale ? "scale" : "blank");
-    if (!["blank", "scale"].includes(bg)) throw e("canvasBackground");
-    if (bg === "scale" && !hasScale) throw e('canvasBackground "scale" kræver scaleMin/scaleMax');
-    if (x.answerValue !== undefined && x.answerValue !== null && typeof x.answerValue !== "number") throw e("answerValue");
+function load(input: unknown): Question[] {
+  const root = input as { rounds?: unknown };
+  if (!root || !Array.isArray(root.rounds)) throw new Error("quiz.json: mangler rounds[]");
+  const keys = new Set<string>();
+  const out: Question[] = [];
 
-    const r = rounds.get(x.round as number);
-    const scoring = ((x.scoring as Scoring | undefined) ?? r?.scoring ?? "manual") as Scoring;
-    const pointMultiplier = (x.pointMultiplier as number | undefined) ?? r?.pointMultiplier ?? 1;
-    if (scoring === "closest" && typeof x.answerValue !== "number")
-      console.warn(`quiz.json ${key}: scoring "closest" uden answerValue – point gives manuelt`);
+  root.rounds.forEach((r: Record<string, unknown>, ri: number) => {
+    const where = `quiz.json rounds[${ri}]`;
+    const fail = (m: string) => new Error(`${where}: ${m}`);
+    if (!Number.isInteger(r.number)) throw fail("number");
+    if (typeof r.title !== "string") throw fail("title");
+    const type = r.answerType as AnswerTypeId;
+    if (!ANSWER_TYPES.includes(type)) throw fail(`answerType skal være én af ${ANSWER_TYPES.join(", ")}`);
+    const meta = META[type];
 
-    return {
-      round: x.round as number,
-      roundTitle: String(x.roundTitle ?? r?.title ?? `Runde ${x.round}`),
-      index: x.index as number,
-      text: x.text as string,
-      mediaType: x.mediaType as QuizQuestion["mediaType"],
-      mediaUrl: (x.mediaUrl as string | null) ?? null,
-      answer: x.answer as string,
-      timerSeconds: x.timerSeconds as number,
-      answerType: "draw",
-      canvasBackground: bg as QuizQuestion["canvasBackground"],
-      scaleMin: hasScale ? (x.scaleMin as number) : null,
-      scaleMax: hasScale ? (x.scaleMax as number) : null,
-      unit: typeof x.unit === "string" ? x.unit : null,
-      answerValue: typeof x.answerValue === "number" ? x.answerValue : null,
-      scoring,
-      pointMultiplier,
-      closestPoints: (x.closestPoints as number[] | undefined) ?? r?.closestPoints ?? [3, 2, 1],
-    };
+    const mult = (r.pointMultiplier as number | undefined) ?? 1;
+    if (!Number.isInteger(mult) || mult < 1 || mult > 5) throw fail("pointMultiplier skal være 1–5");
+    const pointsByRank = r.pointsByRank ?? meta.defaults.pointsByRank;
+    if (!isNumList(pointsByRank)) throw fail("pointsByRank skal være en liste af tal");
+    const pointsCorrect = (r.pointsCorrect as number | undefined) ?? meta.defaults.pointsCorrect;
+    if (!Number.isFinite(pointsCorrect)) throw fail("pointsCorrect");
+    const manualPoints = r.manualPoints ?? [0, 1, 2];
+    if (!isNumList(manualPoints)) throw fail("manualPoints");
+    const scoring = (r.scoring as DrawScoring | undefined) ?? null;
+    if (type === "draw" && !DRAW_SCORINGS.includes(scoring as DrawScoring)) throw fail(`scoring skal være ${DRAW_SCORINGS.join(" | ")}`);
+    const labels = (r.labels as TrueFalseLabels | undefined) ?? DEFAULT_LABELS;
+    if (typeof labels.true !== "string" || typeof labels.false !== "string") throw fail("labels skal være { true, false }");
+    const defTimer = (r.defaultTimerSeconds as number | undefined) ?? meta.defaults.timerSeconds;
+
+    const qs = r.questions as Record<string, unknown>[];
+    if (!Array.isArray(qs) || qs.length === 0) throw fail("questions[] mangler");
+
+    qs.forEach((q, qi) => {
+      const w = `${where}.questions[${qi}]`;
+      const qfail = (m: string) => new Error(`${w}: ${m}`);
+      if (typeof q.key !== "string" || !/^[A-Za-z0-9_-]{1,40}$/.test(q.key)) throw qfail("key (bogstaver/tal/-/_, maks 40)");
+      if (keys.has(q.key)) throw qfail(`dublet key "${q.key}"`);
+      keys.add(q.key);
+      if (typeof q.text !== "string" || !q.text) throw qfail("text");
+      const mediaType = (q.mediaType as MediaType | undefined) ?? "none";
+      if (!["none", "image", "audio", "video"].includes(mediaType)) throw qfail("mediaType");
+      if (mediaType !== "none" && typeof q.mediaUrl !== "string") throw qfail("mediaUrl mangler");
+      const timer = (q.timerSeconds as number | undefined) ?? defTimer;
+      if (!Number.isInteger(timer) || timer < 5) throw qfail("timerSeconds");
+      const parts = q.parts ?? r.parts ?? [];
+      if (!isStrList(parts)) throw qfail("parts skal være en liste af tekster");
+
+      const question: Question = {
+        key: q.key,
+        round: r.number as number,
+        roundTitle: r.title as string,
+        index: qi + 1,
+        roundSize: qs.length,
+        text: q.text,
+        mediaType,
+        mediaUrl: (q.mediaUrl as string | null) ?? null,
+        timerSeconds: timer,
+        answerType: type,
+        answer: q.answer,
+        showTextOnPlay: q.showTextOnPlay === true,
+        revealMediaUrl: (q.revealMediaUrl as string | null | undefined) ?? null,
+        extra: Object.fromEntries(Object.entries(q).filter(([k]) => !COMMON.has(k))),
+        scoring: type === "draw" ? scoring : null,
+        unit: String(q.unit ?? r.unit ?? ""),
+        parts,
+        labels,
+        wagerEnabled: r.wagerEnabled === true,
+        pointMultiplier: mult,
+        pointsByRank,
+        pointsCorrect,
+        manualPoints,
+      };
+      try {
+        meta.validate(question);
+      } catch (e) {
+        throw qfail((e as Error).message);
+      }
+      out.push(question);
+    });
   });
   return out.sort((a, b) => a.round - b.round || a.index - b.index);
 }
 
-export const QUIZ: QuizQuestion[] = load(raw);
-export const TOTAL_ROUNDS = Math.max(...QUIZ.map((q) => q.round));
+export const QUIZ: Question[] = load(raw);
+export const TOTAL_ROUNDS = new Set(QUIZ.map((q) => q.round)).size;
 
-export function roundSize(round: number) {
-  return QUIZ.filter((q) => q.round === round).length;
-}
+export const findQuestion = (key: string) => QUIZ.find((q) => q.key === key) ?? null;
 
-export function findQuestion(round: number, index: number) {
-  return QUIZ.find((q) => q.round === round && q.index === index) ?? null;
-}
-
-export function nextQuestion(round: number, index: number) {
-  const i = QUIZ.findIndex((q) => q.round === round && q.index === index);
+export function nextQuestion(key: string) {
+  const i = QUIZ.findIndex((q) => q.key === key);
   return i >= 0 && i + 1 < QUIZ.length ? QUIZ[i + 1] : null;
-}
-
-/**
- * "closest" scoring: rank teams by distance to the facit; ties share a rank
- * (competition ranking). Base points from closestPoints, × multiplier.
- */
-export function closestScores(
-  q: QuizQuestion,
-  teamIds: string[],
-  values: Map<string, number | null>,
-): { teamId: string; points: number }[] {
-  if (q.answerValue === null) return [];
-  const dist = teamIds
-    .map((id) => ({ id, d: values.get(id) ?? null }))
-    .map(({ id, d }) => ({ id, d: d === null ? null : Math.abs(d - q.answerValue!) }));
-  const ranked = dist.filter((x) => x.d !== null).sort((a, b) => a.d! - b.d!);
-  const pts = new Map<string, number>();
-  for (const x of ranked) {
-    const rank = ranked.findIndex((y) => Math.abs(y.d! - x.d!) < 1e-9); // first index with same distance
-    pts.set(x.id, (q.closestPoints[rank] ?? 0) * q.pointMultiplier);
-  }
-  return teamIds.map((id) => ({ teamId: id, points: pts.get(id) ?? 0 }));
 }

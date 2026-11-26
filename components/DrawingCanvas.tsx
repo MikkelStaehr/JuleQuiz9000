@@ -1,8 +1,6 @@
 "use client";
 
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
-import { detectScaleValue, paintScale } from "@/lib/scale";
-import type { Scale } from "@/lib/types";
 
 export const CANVAS_W = 1200;
 export const CANVAS_H = 840; // 10:7 – same aspect everywhere (play, display, admin)
@@ -20,30 +18,27 @@ export interface DrawingCanvasHandle {
   /** Background (paper/scale) + ink, as PNG. */
   toBlob(): Promise<Blob>;
   isDirty(): boolean;
-  /** For scale questions: value under the drawn cross (null if nothing drawn / no scale). */
-  scaleValue(): number | null;
 }
 
 type Tool = "pen" | "eraser";
 
-/** Paint the paper layer: white, plus the axis for scale questions. */
-export function paintBackground(c: CanvasRenderingContext2D, scale: Scale | null) {
+/** Paint the paper layer (white). */
+export function paintBackground(c: CanvasRenderingContext2D) {
   c.fillStyle = "#ffffff";
   c.fillRect(0, 0, CANVAS_W, CANVAS_H);
-  if (scale) paintScale(c, scale);
 }
 
 /**
  * Drawing surface with pen / eraser / undo / clear and three stroke widths.
- * Two layers: a fixed background (white paper, or a scale axis) and a transparent
+ * Two layers: a fixed white background and a transparent
  * ink layer – the eraser only removes ink. Pointer events (mouse, touch, pen).
  * Fixed internal resolution, scaled to fit the available space. Optionally
  * persisted to localStorage so a refresh during the countdown keeps the drawing.
  */
 export const DrawingCanvas = forwardRef<
   DrawingCanvasHandle,
-  { disabled?: boolean; persistKey?: string | null; scale?: Scale | null; onStroke?: () => void }
->(function DrawingCanvas({ disabled = false, persistKey = null, scale = null, onStroke }, ref) {
+  { disabled?: boolean; persistKey?: string | null; onStroke?: () => void }
+>(function DrawingCanvas({ disabled = false, persistKey = null, onStroke }, ref) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const bgRef = useRef<HTMLCanvasElement>(null);
   const inkRef = useRef<HTMLCanvasElement>(null);
@@ -60,11 +55,9 @@ export const DrawingCanvas = forwardRef<
   const ink = () => inkRef.current!.getContext("2d", { willReadFrequently: true })!;
 
   // Background layer
-  const scaleSig = scale ? `${scale.min}|${scale.max}|${scale.unit}` : "";
   useEffect(() => {
-    paintBackground(bgRef.current!.getContext("2d")!, scale);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scaleSig]);
+    paintBackground(bgRef.current!.getContext("2d")!);
+  }, []);
 
   // Reset ink + restore persisted drawing
   useEffect(() => {
@@ -110,8 +103,6 @@ export const DrawingCanvas = forwardRef<
 
   useImperativeHandle(ref, () => ({
     isDirty: () => dirty.current,
-    scaleValue: () =>
-      scale && dirty.current ? detectScaleValue(ink().getImageData(0, 0, CANVAS_W, CANVAS_H), scale) : null,
     toBlob: () =>
       new Promise<Blob>((resolve, reject) => {
         const out = document.createElement("canvas");

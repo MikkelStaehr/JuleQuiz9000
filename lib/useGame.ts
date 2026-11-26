@@ -2,7 +2,17 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getSupabase } from "./supabase/browser";
-import { TEAM_COLUMNS, type Answer, type Game, type GameState, type Score, type Team } from "./types";
+import {
+  ANSWER_COLUMNS,
+  SCORE_COLUMNS,
+  TEAM_COLUMNS,
+  type AnswerStatus,
+  type AnswerValue,
+  type Game,
+  type GameState,
+  type Score,
+  type Team,
+} from "./types";
 
 /** The currently active game (newest), kept live. Used by /display and /admin. */
 export function useActiveGame() {
@@ -41,13 +51,13 @@ export function useActiveGame() {
 }
 
 /**
- * Live view of one game: state, teams, answers for the current question, all scores.
- * Initial fetch + Supabase Realtime postgres_changes; full refetch on (re)subscribe and tab focus.
+ * Live view of one game: state, teams, answer *status* for the current question, all scores.
+ * Initial fetch + Realtime postgres_changes; full refetch on (re)subscribe and tab focus.
  */
 export function useGame(gameId: string | null | undefined) {
   const [state, setState] = useState<GameState | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
-  const [answers, setAnswers] = useState<Answer[]>([]);
+  const [answers, setAnswers] = useState<AnswerStatus[]>([]);
   const [scores, setScores] = useState<Score[]>([]);
   const [connected, setConnected] = useState(false);
   const qKeyRef = useRef<string | null>(null);
@@ -57,29 +67,33 @@ export function useGame(gameId: string | null | undefined) {
       if (!gameId || !qKey) return setAnswers([]);
       const { data } = await getSupabase()
         .from("answers")
-        .select("*")
+        .select(ANSWER_COLUMNS)
         .eq("game_id", gameId)
         .eq("question_key", qKey);
-      if (qKeyRef.current === qKey) setAnswers((data as Answer[]) ?? []);
+      if (qKeyRef.current === qKey) setAnswers((data as AnswerStatus[]) ?? []);
     },
     [gameId],
   );
 
+  const loadScores = useCallback(async () => {
+    if (!gameId) return;
+    const { data } = await getSupabase().from("scores").select(SCORE_COLUMNS).eq("game_id", gameId);
+    setScores((data as Score[]) ?? []);
+  }, [gameId]);
+
   const loadAll = useCallback(async () => {
     if (!gameId) return;
     const sb = getSupabase();
-    const [s, t, sc] = await Promise.all([
+    const [s, t] = await Promise.all([
       sb.from("game_state").select("*").eq("game_id", gameId).maybeSingle(),
       sb.from("teams").select(TEAM_COLUMNS).eq("game_id", gameId).order("slot"),
-      sb.from("scores").select("game_id, team_id, question_key, points").eq("game_id", gameId),
     ]);
     const gs = (s.data as GameState) ?? null;
     setState(gs);
     setTeams((t.data as Team[]) ?? []);
-    setScores((sc.data as Score[]) ?? []);
     qKeyRef.current = gs?.question_key ?? null;
-    await loadAnswers(gs?.question_key ?? null);
-  }, [gameId, loadAnswers]);
+    await Promise.all([loadAnswers(gs?.question_key ?? null), loadScores()]);
+  }, [gameId, loadAnswers, loadScores]);
 
   useEffect(() => {
     if (!gameId) return;
@@ -91,21 +105,22 @@ export function useGame(gameId: string | null | undefined) {
         const gs = p.new as GameState;
         if (!gs || !gs.game_id) return;
         setState(gs);
-        // Question changed or state touched → refresh answers for the (new) current question.
         qKeyRef.current = gs.question_key;
-        loadAnswers(gs.question_key);
+        loadAnswers(gs.question_key); // question changed / answers cleared
+        loadScores(); // filtered DELETE events aren't delivered by Realtime → refetch on every state change
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "teams", filter }, (p) => {
         const t = p.new as Team;
         if (!t?.id) return;
         setTeams((prev) => [...prev.filter((x) => x.id !== t.id), t].sort((a, b) => a.slot - b.slot));
       })
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "answers", filter }, (p) => {
-        const a = p.new as Answer;
-        if (a.question_key !== qKeyRef.current) return;
+      .on("postgres_changes", { event: "*", schema: "public", table: "answers", filter }, (p) => {
+        const a = p.new as AnswerStatus;
+        if (!a?.team_id || a.question_key !== qKeyRef.current) return;
         setAnswers((prev) => [...prev.filter((x) => x.team_id !== a.team_id), a]);
       })
       .on("postgres_changes", { event: "*", schema: "public", table: "scores", filter }, (p) => {
+        if (p.eventType === "DELETE") return void loadScores();
         const s = p.new as Score;
         if (!s?.team_id) return;
         setScores((prev) => [
@@ -124,7 +139,7 @@ export function useGame(gameId: string | null | undefined) {
       document.removeEventListener("visibilitychange", onVis);
       sb.removeChannel(ch);
     };
-  }, [gameId, loadAll, loadAnswers]);
+  }, [gameId, loadAll, loadAnswers, loadScores]);
 
   // Never expose data from a previous game while switching.
   const cur = useMemo(
@@ -143,13 +158,59 @@ export function useGame(gameId: string | null | undefined) {
     return m;
   }, [cur.scores]);
 
-  return { ...cur, totals, connected: connected && !!gameId, reload: loadAll };
+  const scoreFor = useCallback(
+    (teamId: string, key: string) => cur.scores.find((s) => s.team_id === teamId && s.question_key === key),
+    [cur.scores],
+  );
+
+  return { ...cur, totals, scoreFor, connected: connected && !!gameId, reload: loadAll };
 }
 
-/** Teams that have joined, ranked by total points (desc), ties by slot. */
-export function rankTeams(teams: Team[], totals: Map<string, number>) {
-  return teams
-    .filter((t) => t.name)
-    .map((t) => ({ ...t, total: totals.get(t.id) ?? 0 }))
-    .sort((a, b) => b.total - a.total || a.slot - b.slot);
+/** Answer values for the current question – only available once revealed (RPC revealed_answers). */
+export function useRevealedAnswers(gameId: string | null | undefined, enabled: boolean, qKey: string | null, version: string) {
+  const [rows, setRows] = useState<{ key: string | null; data: AnswerValue[] }>({ key: null, data: [] });
+  useEffect(() => {
+    if (!gameId || !enabled) return;
+    let cancelled = false;
+    getSupabase()
+      .rpc("revealed_answers", { p_game: gameId })
+      .then(({ data }) => {
+        if (!cancelled) setRows({ key: qKey, data: (data as AnswerValue[]) ?? [] });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [gameId, enabled, qKey, version]);
+  return enabled && rows.key === qKey ? rows.data : [];
+}
+
+export interface Standing extends Team {
+  total: number;
+  rank: number;
+  prevRank: number | null;
+}
+
+/** Competition ranking (ties share). prevRank = ranking on scores from rounds before `currentRound`. */
+export function standings(
+  teams: Team[],
+  scores: { team_id: string; points: number; round: number | null }[],
+  currentRound?: number,
+): Standing[] {
+  const joined = teams.filter((t) => t.name);
+  const sum = (pred: (s: { round: number | null }) => boolean) => {
+    const m = new Map<string, number>();
+    for (const s of scores) if (pred(s)) m.set(s.team_id, (m.get(s.team_id) ?? 0) + s.points);
+    return m;
+  };
+  const rankOf = (totals: Map<string, number>) => {
+    const list = joined.map((t) => totals.get(t.id) ?? 0);
+    return (id: string) => list.filter((x) => x > (totals.get(id) ?? 0)).length + 1;
+  };
+  const now = sum(() => true);
+  const rankNow = rankOf(now);
+  const hasPrev = currentRound !== undefined && scores.some((s) => s.round !== null && s.round < currentRound);
+  const rankPrev = hasPrev ? rankOf(sum((s) => s.round !== null && s.round < currentRound!)) : null;
+  return joined
+    .map((t) => ({ ...t, total: now.get(t.id) ?? 0, rank: rankNow(t.id), prevRank: rankPrev ? rankPrev(t.id) : null }))
+    .sort((a, b) => a.rank - b.rank || a.slot - b.slot);
 }

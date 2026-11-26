@@ -1,60 +1,96 @@
 # Den kæmpe store elite jule quiz
 
-Live julequiz, hvor holdene **tegner** deres svar. Next.js 16 (App Router, TypeScript, Tailwind v4) på Vercel, med Supabase (Postgres, Realtime og Storage) som backend. Der er ingen separat server.
+Live julequiz bygget med Next.js 16 (App Router, TypeScript, Tailwind v4). Den deployes på Vercel og bruger Supabase (Postgres, Realtime og Storage) som backend. Der er ingen separat server.
 
-| Route      | Hvem                 | Hvad                                                                 |
-| ---------- | -------------------- | -------------------------------------------------------------------- |
-| `/admin`   | Quizmaster           | Kontrolpanel (password: `ADMIN_PASSWORD`). Viser facit, styrer faser, lyd og point, og har demo-mode |
-| `/display` | Storskærm            | Read-only. Klik én gang for fuldskærm og lyd                         |
-| `/play`    | Holdene (mobil/tablet) | Kode + holdnavn, derefter tegne-canvas                             |
+| Route      | Hvem       | Hvad                                                                                       |
+| ---------- | ---------- | ------------------------------------------------------------------------------------------ |
+| `/admin`   | Quizmaster | Kontrolpanel med password `ADMIN_PASSWORD`: facit, faser, medie, bedømmelse, point og demo-mode |
+| `/display` | Storskærm  | Read-only. Klik én gang for at få fuldskærm og lyd                                         |
+| `/play`    | Holdene    | Holdene logger ind med kode og holdnavn og svarer derefter på deres egen skærm             |
 
 ## Opsætning
 
-1. **Supabase-projekt.** Opret et projekt og kør migrationerne i `supabase/migrations/` i rækkefølge (SQL Editor eller `supabase db push`).
-2. **Anonyme logins.** Slå dem til under Authentication → Sign In / Providers → **Anonymous sign-ins**. Holdene logger ind anonymt, så RLS kan sikre, at et hold kun skriver sine egne svar.
-3. **Env.** Kopiér `.env.example` til `.env.local` og udfyld URL, publishable/anon key, secret/service-role key og `ADMIN_PASSWORD`.
-4. `npm install` og `npm run dev`. Åbn `/admin` og vælg **Start demo**.
-5. **Vercel.** Importér repoet og sæt de samme fire env-variabler. Der kræves ingen anden konfiguration.
+1. Opret et Supabase-projekt og kør `supabase/setup.sql` i SQL Editor. Den samler alle migrationer. Har du allerede et projekt, skal du kun køre de migrationer i `supabase/migrations/`, du mangler.
+2. Gå til Authentication → Sign In / Providers og slå **Allow anonymous sign-ins** til.
+3. Lav `.env.local` ud fra `.env.example`. Du skal bruge URL, publishable key, secret key og `ADMIN_PASSWORD`.
+4. Kør `npm install` og derefter `npm run dev`. Åbn `/admin` og vælg **Start demo**.
+5. `npm test` kører unit tests for scoring.
+6. På Vercel skal du blot importere repoet og sætte de samme fire env-variabler. `vercel.json` fastlåser Next.js-presettet.
 
 ## Flow
 
-`idle → question → countdown → locked → reveal → (scoreboard) → næste`
+`idle → question → countdown → locked → reveal (trinvis) → scoreboard → næste`
 
-- **Vis spørgsmål** skriver spørgsmålets tekst og medie ind i `game_state`. Hold-enheder får derfor aldrig hele quizzen eller facit i forvejen.
-- **Start timer** sætter `timer_ends_at = now() + timerSeconds` i databasen. Alle klienter regner nedtællingen ud lokalt og korrigerer for clock skew via RPC'en `server_now()`.
-- Ved 0, ved **Lås nu** eller når holdet trykker **Send**, låses canvas. Tegningen bliver til en PNG, som uploades til `answers/{gameId}/{questionKey}/{teamId}.png`, og der indsættes en række i `answers`. Der er 20 sekunders upload-grace efter låsning.
-- **Vis svar** viser alle tegninger og facit på storskærmen. Quizmasteren giver point (0 / +1 / +2 / +3 × rundens multiplikator), og scoreboardet opdateres live.
+- Hold-enheder får kun det aktuelle spørgsmål og ser aldrig facit på forhånd. Facit skrives først ind ved reveal.
+- Timeren regnes ud fra `timer_ends_at`, som sættes med databasens tid. Klienterne kompenserer for clock skew via `server_now()`.
+- Svar kan ændres, indtil timeren låser, og det sidste svar tæller. Storskærmen viser kun **"svaret ✓"** under countdown. Hvad holdene har svaret, kan klienterne først læse efter reveal (via `revealed_answers()`).
+- Point beregnes automatisk ved lås og ved reveal. Quizmasteren kan bruge **Beregn point**, se forslaget og trykke **Godkend**. Quizmasterens rettelser ("rettet") overskrives aldrig automatisk. Til sidst ganges alle point med rundens `pointMultiplier`.
+- Scoreboardet viser stillingen og pile, der viser, hvor mange pladser hvert hold er rykket op eller ned i forhold til efter forrige runde.
+
+## Svartyper (`lib/answerTypes/<type>/`)
+
+Hver svartype har sin egen mappe med `PlayInput.tsx` (holdet), `Reveal.tsx` (storskærm), `AdminView.tsx` (quizmaster) og `score.ts` (en ren funktion). Fælles kode ligger i `meta.ts` (defaults, offentlige/afslørede felter og antal reveal-trin), `scoring.ts` (multiplikator) og `registry.tsx`.
+
+| Type         | Input                                                    | Scoring                                                                                       | Reveal                                                           |
+| ------------ | -------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| `draw`       | Canvas med pen, viskelæder, fortryd, ryd og 3 tykkelser. PNG'en uploades ved lås | Sættes på runden med `scoring`: **closest** (quizmaster indtaster den aflæste værdi eller vælger "ugyldig", så rangeres holdene efter afstand), **manual-parts** (✓/✗ pr. del) eller **manual** (0/1/2) | Én tegning ad gangen med zoom, så alle i grid, så facit (og rangliste ved closest) |
+| `geo`        | Leaflet/OSM-kort, hvor holdet trykker for at sætte eller flytte en nål. Street View-billedet kan foldes sammen og vises i fuld skærm med zoom | Haversine-afstand i km. Placeringerne giver 3/2/1 (`pointsByRank`) | Først nåle, så facit-nål, så linjer med km, så rangliste          |
+| `true-false` | To store knapper (`labels`) og satsning 1–3, hvis `wagerEnabled` er slået til | Uden satsning giver rigtigt svar `pointsCorrect`. Med satsning giver rigtigt +sats og forkert −sats | Alle kort vendes samtidig, så facit og pointændring, og til sidst evt. `revealMediaUrl` |
+
+Uafgjort ved rangbaseret scoring: holdene deler placeringen og pointene, og den næste placering springes over (1, 1, 3). Hold uden svar rangeres sidst og får 0.
 
 ## quiz.json
 
 ```jsonc
 {
   "rounds": [
-    { "round": 7, "title": "Hvad siger statistikken?", "scoring": "closest", "pointMultiplier": 2, "closestPoints": [3, 2, 1] }
-  ],
-  "questions": [
-    { "round": 1, "roundTitle": "…", "index": 1, "text": "…", "mediaType": "none|image|audio|video",
-      "mediaUrl": null, "answer": "…", "timerSeconds": 30, "answerType": "draw" },
-    // Skala-spørgsmål: canvasBackground bliver automatisk "scale", når scaleMin/scaleMax er sat
-    { "round": 7, "index": 1, "text": "…", "answer": "Ca. 71 %", "answerValue": 71,
-      "scaleMin": 0, "scaleMax": 100, "unit": "%", "mediaType": "none", "mediaUrl": null, "timerSeconds": 40 }
+    { "number": 1, "title": "Hvad koster den?", "answerType": "draw", "scoring": "closest", "unit": "kr.", "pointsByRank": [3, 2, 1],
+      "questions": [{ "key": "r1q1", "text": "…", "mediaType": "image", "mediaUrl": "/media/…", "answer": 499 }] },
+    { "number": 2, "title": "Hvor fanden er vi?", "answerType": "geo",
+      "questions": [{ "key": "r2q1", "text": "…", "mediaType": "image", "mediaUrl": "/media/streetview.jpg",
+                      "answer": { "lat": 55.33, "lng": 8.76, "label": "Ribe, Danmark" }, "mapStart": { "lat": 56, "lng": 10.4, "zoom": 6 } }] },
+    { "number": 3, "title": "Er det lovligt?", "answerType": "true-false", "labels": { "true": "LOVLIGT", "false": "ULOVLIGT" }, "wagerEnabled": false,
+      "questions": [{ "key": "r3q1", "text": "…", "mediaType": "none", "mediaUrl": null, "answer": false, "revealMediaUrl": null }] },
+    { "number": 5, "title": "Musikalsk forvirring", "answerType": "draw", "scoring": "manual-parts", "parts": ["Sang", "Kunstner"],
+      "questions": [{ "key": "r5q1", "text": "…", "mediaType": "audio", "mediaUrl": "/media/…", "answer": "Titel · Kunstner" }] },
+    { "number": 6, "title": "Hvad har de anmeldt?", "answerType": "draw", "scoring": "manual", "manualPoints": [0, 1, 2],
+      "questions": [{ "key": "r6q1", "text": "Anmeldelsen…", "showTextOnPlay": true, "answer": "Et juletræ", "mediaType": "none", "mediaUrl": null }] },
+    { "number": 7, "title": "Hvad siger statistikken?", "answerType": "true-false", "labels": { "true": "SANDT", "false": "FALSK" },
+      "wagerEnabled": true, "pointMultiplier": 2, "questions": [ … ] }
   ]
 }
 ```
 
-- `rounds` er valgfri. Standardværdierne er `scoring: "manual"` og `pointMultiplier: 1`. Et spørgsmål kan overskrive begge.
-- **Skala-spørgsmål.** Canvas får en akse i baggrunden, og holdet sætter ét kryds. Positionen aflæses på hold-enheden (tyngdepunktet af blækket omkring aksen) og gemmes i `answers.scale_value`. Ved reveal vises alle krydsene i holdfarver på samme akse, og facit-markøren animeres ind til sidst.
-- **`scoring: "closest"`.** Ved **Vis svar** får de tætteste hold automatisk `closestPoints × pointMultiplier`, og ved uafgjort deler holdene placeringen. Quizmasteren kan rette pointene eller trykke **Beregn igen**.
-- **`pointMultiplier > 1`.** Storskærmen viser "DOBBELT POINT" ved rundestart.
-- Medier ligger i `public/media/`. Lydklippene er public domain-melodier, genereret med `node scripts/gen-audio.mjs`.
+Felter pr. runde:
+
+- `pointMultiplier` er 1 som standard. Er den over 1, viser storskærmen "DOBBELT POINT" ved rundestart.
+- `defaultTimerSeconds` er standardtiden for rundens spørgsmål.
+- `pointsByRank`, `pointsCorrect` og `manualPoints` styrer pointgivningen.
+
+Felter pr. spørgsmål (alle valgfrie):
+
+- `timerSeconds` overskriver rundens timer.
+- `showTextOnPlay` viser spørgsmålsteksten på holdenes skærme.
+- `revealMediaUrl` er et billede, der vises efter facit, eller lyd/video, som quizmasteren afspiller på storskærmen.
+
+Lyd og video afspilles kun på storskærmen. Quizmasteren styrer dem med knapperne afspil, pause, genstart, stop og "afspil fra sek.".
+
+Medierne ligger i `public/media/`. Eksemplerne er pladsholdere, som du skal erstatte med dine egne Street View-screenshots og produktbilleder.
 
 ## Demo-mode
 
-**Start demo** i `/admin` opretter et spil med fire simulerede hold. De afleverer dummy-tegninger (eller kryds på skalaen) på tilfældige tidspunkter under nedtællingen. Man kan også vælge op til fire rigtige pladser, så `/play` kan testes i en anden fane. Med `/play?p=2` kan man køre flere hold i samme browser.
+**Start demo** opretter fire simulerede hold med forskelligt niveau:
+
+- **Tegning:** holdene afleverer håndskrevne PNG'er ved lås.
+- **Kort:** de sætter nåle tæt på eller langt fra facit.
+- **Sandt/falsk:** de svarer og satser.
+- Ét hold skifter mening undervejs.
+
+Du kan også vælge op til fire rigtige pladser. Med `/play?p=2` kan du køre flere hold i samme browser.
 
 ## Sikkerhed (RLS)
 
-- Klienter kan kun **læse** følgende: `games`, `game_state`, `answers`, `scores` og `teams`. For `teams` gælder det dog ikke `join_code` og `auth_uid`, som er spærret med kolonne-rettigheder.
-- Hold må kun indsætte deres egen række i `answers` og uploade til deres egen sti. Det kræver, at holdet er bundet til `auth.uid()` via `join_team()`, at spørgsmålet er det aktuelle, og at fasen er countdown/locked inden for grace-perioden.
-- Alt andet går gennem server actions med service-role-nøglen og et HMAC-cookie afledt af `ADMIN_PASSWORD`.
-- Bevidste forenklinger: Storage-bucket'en er public, så stien til en tegning kan gættes, når den er uploadet. Et hold, der trykker Send tidligt, kan i teorien blive "kigget over skulderen". Koderne er kun på fire cifre og har ingen rate limiting.
+- Klienter kan kun læse. Holdenes svar (`value`, `wager`) og quizmasterens bedømmelser (`judgment`) kan ikke læses før reveal, og join-koder kan aldrig læses.
+- Hold skriver kun via `submit_answer()` og til egen sti i Storage. Det kræver, at holdet er bundet til `auth.uid()`, at spørgsmålet er åbent, og at timeren højst er udløbet for 15 sekunder siden (grace-periode).
+- Alt quizmaster-arbejde kører gennem server actions med service-role-nøglen og et HMAC-cookie, der afledes af `ADMIN_PASSWORD`.
+- Kendte begrænsninger: Storage-bucket'en er public, når tegningerne er uploadet. Koderne er kun på fire cifre og har ingen rate limiting.

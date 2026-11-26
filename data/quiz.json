@@ -1,584 +1,129 @@
 {
   "rounds": [
     {
-      "round": 7,
-      "title": "Hvad siger statistikken?",
+      "number": 1,
+      "title": "Hvad koster den?",
+      "answerType": "draw",
       "scoring": "closest",
-      "pointMultiplier": 2,
-      "closestPoints": [
-        3,
-        2,
-        1
+      "unit": "kr.",
+      "pointsByRank": [3, 2, 1],
+      "defaultTimerSeconds": 45,
+      "questions": [
+        {
+          "key": "r1q1",
+          "text": "Hvad koster denne julesweater?",
+          "mediaType": "image",
+          "mediaUrl": "/media/product-placeholder.svg",
+          "answer": 499
+        }
       ]
-    }
-  ],
-  "questions": [
-    {
-      "round": 1,
-      "roundTitle": "Juletraditioner",
-      "index": 1,
-      "text": "Hvor mange lys er der i en adventskrans?",
-      "mediaType": "none",
-      "mediaUrl": null,
-      "answer": "4",
-      "timerSeconds": 30,
-      "answerType": "draw"
     },
     {
-      "round": 1,
-      "roundTitle": "Juletraditioner",
-      "index": 2,
-      "text": "Hvad skal man finde i risalamanden for at vinde mandelgaven?",
-      "mediaType": "none",
-      "mediaUrl": null,
-      "answer": "En hel mandel",
-      "timerSeconds": 30,
-      "answerType": "draw"
+      "number": 2,
+      "title": "Hvor fanden er vi?",
+      "answerType": "geo",
+      "pointsByRank": [3, 2, 1],
+      "defaultTimerSeconds": 60,
+      "questions": [
+        {
+          "key": "r2q1",
+          "text": "Hvor er dette billede taget?",
+          "mediaType": "image",
+          "mediaUrl": "/media/streetview-placeholder.svg",
+          "answer": { "lat": 55.3277, "lng": 8.76, "label": "Ribe, Danmark" },
+          "mapStart": { "lat": 56.1, "lng": 10.4, "zoom": 6 }
+        }
+      ]
     },
     {
-      "round": 1,
-      "roundTitle": "Juletraditioner",
-      "index": 3,
-      "text": "Hvilken dato er lillejuleaften?",
-      "mediaType": "none",
-      "mediaUrl": null,
-      "answer": "23. december",
-      "timerSeconds": 30,
-      "answerType": "draw"
+      "number": 3,
+      "title": "Er det lovligt?",
+      "answerType": "true-false",
+      "labels": { "true": "LOVLIGT", "false": "ULOVLIGT" },
+      "wagerEnabled": false,
+      "defaultTimerSeconds": 15,
+      "questions": [
+        {
+          "key": "r3q1",
+          "text": "Er det lovligt at cykle uden lys, når det er mørkt?",
+          "mediaType": "none",
+          "mediaUrl": null,
+          "answer": false
+        }
+      ]
     },
     {
-      "round": 1,
-      "roundTitle": "Juletraditioner",
-      "index": 4,
-      "text": "Hvem bor på loftet og skal have risengrød juleaften?",
-      "mediaType": "none",
-      "mediaUrl": null,
-      "answer": "Nissen (gårdnissen)",
-      "timerSeconds": 30,
-      "answerType": "draw"
+      "number": 4,
+      "title": "Fake news eller virkelighed?",
+      "answerType": "true-false",
+      "labels": { "true": "ÆGTE", "false": "FAKE" },
+      "wagerEnabled": false,
+      "defaultTimerSeconds": 20,
+      "questions": [
+        {
+          "key": "r4q1",
+          "text": "“Mand fra Vejle fik bøde for at synge julesange for højt på sin egen altan”",
+          "mediaType": "none",
+          "mediaUrl": null,
+          "answer": false,
+          "showTextOnPlay": true,
+          "revealMediaUrl": null
+        }
+      ]
     },
     {
-      "round": 1,
-      "roundTitle": "Juletraditioner",
-      "index": 5,
-      "text": "Hvor mange låger har en klassisk julekalender?",
-      "mediaType": "none",
-      "mediaUrl": null,
-      "answer": "24",
-      "timerSeconds": 30,
-      "answerType": "draw"
-    },
-    {
-      "round": 1,
-      "roundTitle": "Juletraditioner",
-      "index": 6,
-      "text": "Hvad hedder den varme juledrik med rosiner og mandler?",
-      "mediaType": "none",
-      "mediaUrl": null,
-      "answer": "Gløgg",
-      "timerSeconds": 30,
-      "answerType": "draw"
-    },
-    {
-      "round": 1,
-      "roundTitle": "Juletraditioner",
-      "index": 7,
-      "text": "Hvilken træsort er det mest solgte juletræ i Danmark?",
-      "mediaType": "none",
-      "mediaUrl": null,
-      "answer": "Nordmannsgran",
-      "timerSeconds": 30,
-      "answerType": "draw"
-    },
-    {
-      "round": 2,
-      "roundTitle": "Julefilm & TV",
-      "index": 1,
-      "text": "I “Alene hjemme” – hvilken by flyver familien til uden Kevin?",
-      "mediaType": "none",
-      "mediaUrl": null,
-      "answer": "Paris",
-      "timerSeconds": 30,
-      "answerType": "draw"
-    },
-    {
-      "round": 2,
-      "roundTitle": "Julefilm & TV",
-      "index": 2,
-      "text": "Hvad hedder den grønne figur, der stjæler julen?",
-      "mediaType": "none",
-      "mediaUrl": null,
-      "answer": "Grinchen",
-      "timerSeconds": 30,
-      "answerType": "draw"
-    },
-    {
-      "round": 2,
-      "roundTitle": "Julefilm & TV",
-      "index": 3,
-      "text": "I “Love Actually” – hvilket job har Hugh Grants figur?",
-      "mediaType": "none",
-      "mediaUrl": null,
-      "answer": "Britisk premierminister",
-      "timerSeconds": 30,
-      "answerType": "draw"
-    },
-    {
-      "round": 2,
-      "roundTitle": "Julefilm & TV",
-      "index": 4,
-      "text": "Hvor mange julens ånder besøger Scrooge i “Et juleeventyr” (ud over Marley)?",
-      "mediaType": "none",
-      "mediaUrl": null,
-      "answer": "3",
-      "timerSeconds": 30,
-      "answerType": "draw"
-    },
-    {
-      "round": 2,
-      "roundTitle": "Julefilm & TV",
-      "index": 5,
-      "text": "Hvad hedder snemanden i “Frost”?",
-      "mediaType": "none",
-      "mediaUrl": null,
-      "answer": "Olaf",
-      "timerSeconds": 30,
-      "answerType": "draw"
-    },
-    {
-      "round": 2,
-      "roundTitle": "Julefilm & TV",
-      "index": 6,
-      "text": "I hvilken skyskraber foregår “Die Hard”?",
-      "mediaType": "none",
-      "mediaUrl": null,
-      "answer": "Nakatomi Plaza",
-      "timerSeconds": 40,
-      "answerType": "draw"
-    },
-    {
-      "round": 2,
-      "roundTitle": "Julefilm & TV",
-      "index": 7,
-      "text": "Hvad klokken sendes “Disneys juleshow – Fra alle os til alle jer” traditionelt juleaften?",
-      "mediaType": "none",
-      "mediaUrl": null,
-      "answer": "Kl. 16.00",
-      "timerSeconds": 30,
-      "answerType": "draw"
-    },
-    {
-      "round": 3,
-      "roundTitle": "Gæt julesangen",
-      "index": 1,
-      "text": "Hvilken julesang er det?",
-      "mediaType": "audio",
-      "mediaUrl": "/media/song-jingle-bells.wav",
-      "answer": "Jingle Bells",
-      "timerSeconds": 40,
-      "answerType": "draw"
-    },
-    {
-      "round": 3,
-      "roundTitle": "Gæt julesangen",
-      "index": 2,
-      "text": "Hvilken julesang er det?",
-      "mediaType": "audio",
-      "mediaUrl": "/media/song-silent-night.wav",
-      "answer": "Glade jul / Stille Nacht",
-      "timerSeconds": 40,
-      "answerType": "draw"
-    },
-    {
-      "round": 3,
-      "roundTitle": "Gæt julesangen",
-      "index": 3,
-      "text": "Hvilken julesang er det?",
-      "mediaType": "audio",
-      "mediaUrl": "/media/song-we-wish-you.wav",
-      "answer": "We Wish You a Merry Christmas",
-      "timerSeconds": 40,
-      "answerType": "draw"
-    },
-    {
-      "round": 3,
-      "roundTitle": "Gæt julesangen",
-      "index": 4,
-      "text": "Hvilken julesang er det?",
-      "mediaType": "audio",
-      "mediaUrl": "/media/song-joy-to-the-world.wav",
-      "answer": "Joy to the World",
-      "timerSeconds": 40,
-      "answerType": "draw"
-    },
-    {
-      "round": 3,
-      "roundTitle": "Gæt julesangen",
-      "index": 5,
-      "text": "Hvilken julesang er det?",
-      "mediaType": "audio",
-      "mediaUrl": "/media/song-o-tannenbaum.wav",
-      "answer": "O Tannenbaum / O juletræ",
-      "timerSeconds": 40,
-      "answerType": "draw"
-    },
-    {
-      "round": 3,
-      "roundTitle": "Gæt julesangen",
-      "index": 6,
-      "text": "Hvilken julesang er det?",
-      "mediaType": "audio",
-      "mediaUrl": "/media/song-deck-the-halls.wav",
-      "answer": "Deck the Halls",
-      "timerSeconds": 40,
-      "answerType": "draw"
-    },
-    {
-      "round": 3,
-      "roundTitle": "Gæt julesangen",
-      "index": 7,
-      "text": "Hvem synger “All I Want for Christmas Is You”?",
-      "mediaType": "none",
-      "mediaUrl": null,
-      "answer": "Mariah Carey",
-      "timerSeconds": 30,
-      "answerType": "draw"
-    },
-    {
-      "round": 4,
-      "roundTitle": "Jul rundt om i verden",
-      "index": 1,
-      "text": "Julemanden har sit “officielle” hjem i dette land. Hvad hedder byen ved polarcirklen?",
-      "mediaType": "image",
-      "mediaUrl": "/media/flag-finland.svg",
-      "answer": "Rovaniemi (Finland)",
-      "timerSeconds": 40,
-      "answerType": "draw"
-    },
-    {
-      "round": 4,
-      "roundTitle": "Jul rundt om i verden",
-      "index": 2,
-      "text": "Her kommer Sinterklaas sejlende med båd. Fra hvilket land?",
-      "mediaType": "image",
-      "mediaUrl": "/media/flag-netherlands.svg",
-      "answer": "Spanien",
-      "timerSeconds": 40,
-      "answerType": "draw"
-    },
-    {
-      "round": 4,
-      "roundTitle": "Jul rundt om i verden",
-      "index": 3,
-      "text": "Her spiser mange julemad fra en bestemt fastfood-kæde. Hvilken?",
-      "mediaType": "image",
-      "mediaUrl": "/media/flag-japan.svg",
-      "answer": "KFC",
-      "timerSeconds": 40,
-      "answerType": "draw"
-    },
-    {
-      "round": 4,
-      "roundTitle": "Jul rundt om i verden",
-      "index": 4,
-      "text": "Dette land sender hvert år et juletræ til en kendt plads i London. Hvilken?",
-      "mediaType": "image",
-      "mediaUrl": "/media/flag-norway.svg",
-      "answer": "Trafalgar Square",
-      "timerSeconds": 40,
-      "answerType": "draw"
-    },
-    {
-      "round": 4,
-      "roundTitle": "Jul rundt om i verden",
-      "index": 5,
-      "text": "Her kommer der ikke én, men flere julesvende. Hvor mange?",
-      "mediaType": "image",
-      "mediaUrl": "/media/flag-iceland.svg",
-      "answer": "13 (Island)",
-      "timerSeconds": 40,
-      "answerType": "draw"
-    },
-    {
-      "round": 4,
-      "roundTitle": "Jul rundt om i verden",
-      "index": 6,
-      "text": "Hvilken by i dette land har det berømte julemarked “Christkindlesmarkt”?",
-      "mediaType": "image",
-      "mediaUrl": "/media/flag-germany.svg",
-      "answer": "Nürnberg",
-      "timerSeconds": 40,
-      "answerType": "draw"
-    },
-    {
-      "round": 4,
-      "roundTitle": "Jul rundt om i verden",
-      "index": 7,
-      "text": "Julestjernen (planten) stammer herfra. Tegn landets flag-motiv i midten – eller skriv landet!",
-      "mediaType": "image",
-      "mediaUrl": "/media/flag-mexico.svg",
-      "answer": "Mexico (ørn med slange på kaktus)",
-      "timerSeconds": 40,
-      "answerType": "draw"
-    },
-    {
-      "round": 5,
-      "roundTitle": "Tegn det!",
-      "index": 1,
-      "text": "Tegn et rensdyr!",
-      "mediaType": "none",
-      "mediaUrl": null,
-      "answer": "Quizmaster bedømmer: gevir, fire ben og en rød tud = 3 point",
-      "timerSeconds": 45,
-      "answerType": "draw"
-    },
-    {
-      "round": 5,
-      "roundTitle": "Tegn det!",
-      "index": 2,
-      "text": "Tegn julemanden, der sidder fast i skorstenen.",
-      "mediaType": "none",
-      "mediaUrl": null,
-      "answer": "Kreativitet og humor tæller",
-      "timerSeconds": 45,
-      "answerType": "draw"
-    },
-    {
-      "round": 5,
-      "roundTitle": "Tegn det!",
-      "index": 3,
-      "text": "Tegn en snemand – på kun 20 sekunder!",
-      "mediaType": "none",
-      "mediaUrl": null,
-      "answer": "Tre kugler, gulerod og hat",
-      "timerSeconds": 20,
-      "answerType": "draw"
-    },
-    {
-      "round": 5,
-      "roundTitle": "Tegn det!",
-      "index": 4,
-      "text": "Tegn kontorets julefrokost.",
-      "mediaType": "none",
-      "mediaUrl": null,
-      "answer": "Mest detaljer vinder",
-      "timerSeconds": 45,
-      "answerType": "draw"
-    },
-    {
-      "round": 5,
-      "roundTitle": "Tegn det!",
-      "index": 5,
-      "text": "Tegn en pebernød – men gør den skræmmende.",
-      "mediaType": "none",
-      "mediaUrl": null,
-      "answer": "Mest uhyggelige pebernød vinder",
-      "timerSeconds": 30,
-      "answerType": "draw"
-    },
-    {
-      "round": 5,
-      "roundTitle": "Tegn det!",
-      "index": 6,
-      "text": "Tegn juletræet, efter katten har været der.",
-      "mediaType": "none",
-      "mediaUrl": null,
-      "answer": "Bedste kaos vinder",
-      "timerSeconds": 40,
-      "answerType": "draw"
-    },
-    {
-      "round": 5,
-      "roundTitle": "Tegn det!",
-      "index": 7,
-      "text": "Tegn quizmasteren som nisse.",
-      "mediaType": "none",
-      "mediaUrl": null,
-      "answer": "Smiger belønnes",
-      "timerSeconds": 45,
-      "answerType": "draw"
-    },
-    {
-      "round": 6,
-      "roundTitle": "Tal & fakta",
-      "index": 1,
-      "text": "Hvor mange rensdyr trækker julemandens kane – inkl. Rudolf?",
-      "mediaType": "none",
-      "mediaUrl": null,
-      "answer": "9",
-      "timerSeconds": 30,
-      "answerType": "draw"
-    },
-    {
-      "round": 6,
-      "roundTitle": "Tal & fakta",
-      "index": 2,
-      "text": "I “De tolv juledage” – hvor mange gaver får man i alt, når alle vers lægges sammen?",
-      "mediaType": "none",
-      "mediaUrl": null,
-      "answer": "364",
-      "timerSeconds": 45,
-      "answerType": "draw"
-    },
-    {
-      "round": 6,
-      "roundTitle": "Tal & fakta",
-      "index": 3,
-      "text": "Hvilket år udkom det allerførste danske julemærke?",
-      "mediaType": "none",
-      "mediaUrl": null,
-      "answer": "1904",
-      "timerSeconds": 30,
-      "answerType": "draw"
-    },
-    {
-      "round": 6,
-      "roundTitle": "Tal & fakta",
-      "index": 4,
-      "text": "Hvor mange arme (sider) har et snefnug?",
-      "mediaType": "none",
-      "mediaUrl": null,
-      "answer": "6",
-      "timerSeconds": 30,
-      "answerType": "draw"
-    },
-    {
-      "round": 6,
-      "roundTitle": "Tal & fakta",
-      "index": 5,
-      "text": "Hvilket år blev julekalenderen “Nissebanden” første gang vist på DR?",
-      "mediaType": "none",
-      "mediaUrl": null,
-      "answer": "1984",
-      "timerSeconds": 30,
-      "answerType": "draw"
-    },
-    {
-      "round": 6,
-      "roundTitle": "Tal & fakta",
-      "index": 6,
-      "text": "Hvor mange kilometer er der cirka fra København til Nordpolen? (tættest vinder)",
-      "mediaType": "none",
-      "mediaUrl": null,
-      "answer": "Ca. 3.800 km",
-      "timerSeconds": 30,
-      "answerType": "draw"
-    },
-    {
-      "round": 6,
-      "roundTitle": "Tal & fakta",
-      "index": 7,
-      "text": "Hvor mange dage er der fra 1. december til og med juleaften?",
-      "mediaType": "none",
-      "mediaUrl": null,
-      "answer": "24",
-      "timerSeconds": 30,
-      "answerType": "draw"
-    },
-    {
-      "round": 7,
-      "roundTitle": "Hvad siger statistikken?",
-      "index": 1,
-      "text": "Hvor stor en del af Jordens overflade er dækket af vand?",
-      "mediaType": "none",
-      "mediaUrl": null,
-      "answer": "Ca. 71 %",
-      "answerValue": 71,
+      "number": 5,
+      "title": "Musikalsk forvirring",
       "answerType": "draw",
-      "scaleMin": 0,
-      "scaleMax": 100,
-      "unit": "%",
-      "timerSeconds": 40
+      "scoring": "manual-parts",
+      "parts": ["Sang", "Kunstner"],
+      "pointsCorrect": 1,
+      "defaultTimerSeconds": 45,
+      "questions": [
+        {
+          "key": "r5q1",
+          "text": "Hvilken sang er det – og hvem har skrevet den?",
+          "mediaType": "audio",
+          "mediaUrl": "/media/song-jingle-bells.wav",
+          "answer": "Jingle Bells · James Lord Pierpont"
+        }
+      ]
     },
     {
-      "round": 7,
-      "roundTitle": "Hvad siger statistikken?",
-      "index": 2,
-      "text": "Hvor mange procent af atmosfæren er kvælstof?",
-      "mediaType": "none",
-      "mediaUrl": null,
-      "answer": "Ca. 78 %",
-      "answerValue": 78,
+      "number": 6,
+      "title": "Hvad har de anmeldt?",
       "answerType": "draw",
-      "scaleMin": 0,
-      "scaleMax": 100,
-      "unit": "%",
-      "timerSeconds": 40
+      "scoring": "manual",
+      "manualPoints": [0, 1, 2],
+      "defaultTimerSeconds": 45,
+      "questions": [
+        {
+          "key": "r6q1",
+          "text": "“Tør, overpyntet og drysser over det hele allerede efter tre dage. Duften er dog himmelsk.” ★★☆☆☆☆",
+          "mediaType": "none",
+          "mediaUrl": null,
+          "showTextOnPlay": true,
+          "answer": "Et juletræ"
+        }
+      ]
     },
     {
-      "round": 7,
-      "roundTitle": "Hvad siger statistikken?",
-      "index": 3,
-      "text": "Hvor stor en del af Grønland er dækket af indlandsis?",
-      "mediaType": "none",
-      "mediaUrl": null,
-      "answer": "Ca. 80 %",
-      "answerValue": 80,
-      "answerType": "draw",
-      "scaleMin": 0,
-      "scaleMax": 100,
-      "unit": "%",
-      "timerSeconds": 40
-    },
-    {
-      "round": 7,
-      "roundTitle": "Hvad siger statistikken?",
-      "index": 4,
-      "text": "Hvor mange procent af en voksen menneskekrop består af vand?",
-      "mediaType": "none",
-      "mediaUrl": null,
-      "answer": "Ca. 60 %",
-      "answerValue": 60,
-      "answerType": "draw",
-      "scaleMin": 0,
-      "scaleMax": 100,
-      "unit": "%",
-      "timerSeconds": 40
-    },
-    {
-      "round": 7,
-      "roundTitle": "Hvad siger statistikken?",
-      "index": 5,
-      "text": "Hvor høj er Rundetårn?",
-      "mediaType": "none",
-      "mediaUrl": null,
-      "answer": "34,8 meter",
-      "answerValue": 34.8,
-      "answerType": "draw",
-      "scaleMin": 0,
-      "scaleMax": 100,
-      "unit": "m",
-      "timerSeconds": 40
-    },
-    {
-      "round": 7,
-      "roundTitle": "Hvad siger statistikken?",
-      "index": 6,
-      "text": "Hvad er den koldeste temperatur, der er målt i Danmark?",
-      "mediaType": "none",
-      "mediaUrl": null,
-      "answer": "−31,2 °C (Hørsted, 1982)",
-      "answerValue": -31.2,
-      "answerType": "draw",
-      "scaleMin": -40,
-      "scaleMax": 0,
-      "unit": "°C",
-      "timerSeconds": 40
-    },
-    {
-      "round": 7,
-      "roundTitle": "Hvad siger statistikken?",
-      "index": 7,
-      "text": "Hvor gammel blev H.C. Andersen?",
-      "mediaType": "none",
-      "mediaUrl": null,
-      "answer": "70 år (1805–1875)",
-      "answerValue": 70,
-      "answerType": "draw",
-      "scaleMin": 0,
-      "scaleMax": 100,
-      "unit": "år",
-      "timerSeconds": 40
+      "number": 7,
+      "title": "Hvad siger statistikken?",
+      "answerType": "true-false",
+      "labels": { "true": "SANDT", "false": "FALSK" },
+      "wagerEnabled": true,
+      "pointMultiplier": 2,
+      "defaultTimerSeconds": 20,
+      "questions": [
+        {
+          "key": "r7q1",
+          "text": "Mere end 70 % af Jordens overflade er dækket af vand.",
+          "mediaType": "none",
+          "mediaUrl": null,
+          "answer": true
+        }
+      ]
     }
   ]
 }

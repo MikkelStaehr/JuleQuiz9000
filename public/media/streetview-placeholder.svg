@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" width="1600" height="900">
+  <defs><linearGradient id="s" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9cc4e4"/><stop offset="1" stop-color="#dfeaf2"/></linearGradient></defs>
+  <rect width="1600" height="560" fill="url(#s)"/>
+  <rect y="560" width="1600" height="340" fill="#8a8f86"/>
+  <path d="M700 900 L780 560 L820 560 L900 900 Z" fill="#a7aaa3"/>
+  <rect x="120" y="300" width="380" height="260" fill="#b85c45"/><path d="M100 300 L310 170 L520 300 Z" fill="#5b3a32"/>
+  <rect x="1050" y="250" width="420" height="310" fill="#c9b79c"/><path d="M1030 250 L1260 120 L1490 250 Z" fill="#4c4c4c"/>
+  <rect x="0" y="770" width="1600" height="130" fill="rgba(0,0,0,0.55)"/>
+  <text x="800" y="835" font-family="Arial, sans-serif" font-size="44" fill="#fff" text-anchor="middle">EKSEMPEL – indsæt jeres eget Street View-screenshot</text>
+  <text x="800" y="880" font-family="Arial, sans-serif" font-size="28" fill="#ddd" text-anchor="middle">public/media/… og ret mediaUrl i data/quiz.json</text>
+</svg>

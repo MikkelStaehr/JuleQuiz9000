@@ -4,17 +4,21 @@ import { randomInt } from "node:crypto";
 import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { ADMIN_COOKIE, adminToken, checkPassword, requireAdmin } from "@/lib/admin-auth";
+import { META } from "@/lib/answerTypes/meta";
+import { scoreQuestion } from "@/lib/answerTypes/scoring";
+import { drawJudgingComplete } from "@/lib/answerTypes/draw/score";
+import type { Question, ScoreAnswer, ScoreResult } from "@/lib/answerTypes/types";
+import { QUIZ, TOTAL_ROUNDS, findQuestion, nextQuestion } from "@/lib/quiz";
 import { getAdminSupabase } from "@/lib/supabase/admin";
-import { QUIZ, TOTAL_ROUNDS, closestScores, findQuestion, nextQuestion, roundSize } from "@/lib/quiz";
-import { answerPath, questionKey, type MediaCommand, type QuizQuestion } from "@/lib/types";
+import type { AnswerValue, MediaCommand } from "@/lib/types";
 
-type Result = { ok: true } | { ok: false; error: string };
+type Result<T = unknown> = { ok: true; data?: T } | { ok: false; error: string };
 
-async function run(fn: () => Promise<void>): Promise<Result> {
+async function run<T>(fn: () => Promise<T>): Promise<Result<T>> {
   try {
     await requireAdmin();
-    await fn();
-    return { ok: true };
+    const data = await fn();
+    return { ok: true, data };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
@@ -50,30 +54,29 @@ export async function logout() {
   revalidatePath("/admin");
 }
 
-// ───────────── helpers ─────────────
+// ───────────── state helpers ─────────────
 
-function questionFields(q: QuizQuestion) {
+function questionFields(q: Question) {
   return {
     current_round: q.round,
     current_index: q.index,
+    question_key: q.key,
     round_title: q.roundTitle,
-    round_size: roundSize(q.round),
+    round_size: q.roundSize,
     total_rounds: TOTAL_ROUNDS,
-    // round-level settings are public (display announces "DOBBELT POINT" at round start)
-    scoring: q.scoring,
     point_multiplier: q.pointMultiplier,
+    answer_type: q.answerType,
   };
 }
 
-function shownFields(q: QuizQuestion) {
+/** Public part of the question (never the facit). */
+function shownFields(q: Question) {
   return {
     question_text: q.text,
     media_type: q.mediaType,
     media_url: q.mediaUrl,
-    canvas_background: q.canvasBackground,
-    scale_min: q.scaleMin,
-    scale_max: q.scaleMax,
-    scale_unit: q.unit,
+    show_text_on_play: q.showTextOnPlay,
+    public_payload: META[q.answerType].publicPayload(q),
   };
 }
 
@@ -81,80 +84,130 @@ const CLEARED = {
   question_text: null,
   media_type: "none",
   media_url: null,
+  show_text_on_play: false,
+  public_payload: {},
   answer_text: null,
-  answer_value: null,
-  canvas_background: "blank",
-  scale_min: null,
-  scale_max: null,
-  scale_unit: null,
+  reveal_payload: null,
+  reveal_step: 0,
   timer_seconds: null,
   timer_ends_at: null,
   media_command: "stop",
   media_command_at: null,
+  media_seek: null,
 } as const;
 
-async function currentQuestion(gameId: string) {
-  const sb = getAdminSupabase();
+function mediaKind(url: string): "audio" | "video" | "image" {
+  if (/\.(mp3|wav|ogg|oga|m4a|aac|flac)(\?|$)/i.test(url)) return "audio";
+  if (/\.(mp4|webm|mov|m4v)(\?|$)/i.test(url)) return "video";
+  return "image";
+}
+
+async function current(gameId: string) {
   const { data } = must(
-    await sb.from("game_state").select("phase, current_round, current_index").eq("game_id", gameId).single(),
+    await getAdminSupabase()
+      .from("game_state")
+      .select("phase, question_key, reveal_step, reveal_payload")
+      .eq("game_id", gameId)
+      .single(),
   );
-  const q = findQuestion(data.current_round, data.current_index);
-  if (!q) throw new Error("Spørgsmålet findes ikke i quiz.json");
-  return { q, phase: data.phase as string };
+  const q = findQuestion(data.question_key);
+  if (!q) throw new Error(`Spørgsmålet "${data.question_key}" findes ikke i quiz.json`);
+  return {
+    q,
+    phase: data.phase as string,
+    step: data.reveal_step as number,
+    revealPayload: data.reveal_payload as Record<string, unknown> | null,
+  };
 }
 
 async function patchState(gameId: string, patch: Record<string, unknown>) {
-  must(
-    await getAdminSupabase()
-      .from("game_state")
-      .update({ ...patch, updated_at: new Date().toISOString() })
-      .eq("game_id", gameId),
-  );
+  must(await getAdminSupabase().from("game_state").update({ ...patch, updated_at: new Date().toISOString() }).eq("game_id", gameId));
 }
 
-function uniqueCodes(n: number) {
-  const codes = new Set<string>();
-  while (codes.size < n) codes.add(String(randomInt(1000, 10000)));
-  return [...codes];
+// ───────────── scoring ─────────────
+
+async function loadScoreAnswers(gameId: string, q: Question): Promise<ScoreAnswer[]> {
+  const sb = getAdminSupabase();
+  const [{ data: teams }, { data: answers }] = await Promise.all([
+    sb.from("teams").select("id").eq("game_id", gameId).not("name", "is", null),
+    sb.from("answers").select("team_id, value, wager, judgment").eq("game_id", gameId).eq("question_key", q.key),
+  ]);
+  const by = new Map((answers ?? []).map((a) => [a.team_id as string, a]));
+  return (teams ?? []).map((t) => ({
+    teamId: t.id as string,
+    value: by.get(t.id)?.value ?? null,
+    wager: (by.get(t.id)?.wager as number | null) ?? null,
+    judgment: (by.get(t.id)?.judgment as Record<string, unknown> | null) ?? null,
+  }));
 }
 
-const DEMO_NAMES = ["Nissebanden", "Rensdyrene", "Pebernødderne", "Team Risalamande"];
+async function computeScores(gameId: string, q: Question): Promise<ScoreResult[]> {
+  return scoreQuestion(q, await loadScoreAnswers(gameId, q));
+}
+
+/**
+ * auto    – at lock / reveal: write computed points, but only over rows that are still 'auto'
+ * judge   – after a quizmaster judgment (draw): write over everything except manual overrides
+ * approve – quizmaster pressed "Godkend": same as judge, marked 'approved'
+ * draw/closest is only written once every drawing has been read or marked "ugyldig".
+ */
+async function storeScores(gameId: string, q: Question, mode: "auto" | "judge" | "approve") {
+  const sb = getAdminSupabase();
+  const answers = await loadScoreAnswers(gameId, q);
+  if (q.answerType === "draw" && !drawJudgingComplete(q, answers)) {
+    if (mode === "approve") throw new Error("Aflæs alle tegninger (eller markér dem ugyldige) før pointene kan godkendes");
+    return;
+  }
+  if (q.answerType === "draw" && mode === "auto" && answers.every((a) => !a.judgment)) return; // nothing judged yet
+  const results = scoreQuestion(q, answers);
+  const { data: existing } = await sb.from("scores").select("team_id, source").eq("game_id", gameId).eq("question_key", q.key);
+  const src = new Map((existing ?? []).map((s) => [s.team_id as string, s.source as string]));
+  const now = new Date().toISOString();
+  const rows = results
+    .filter((r) => (mode === "auto" ? !src.has(r.teamId) || src.get(r.teamId) === "auto" : src.get(r.teamId) !== "manual"))
+    .map((r) => ({
+      game_id: gameId,
+      team_id: r.teamId,
+      question_key: q.key,
+      round: q.round,
+      points: r.points,
+      detail: { ...r.detail, rank: r.rank ?? null },
+      source: mode === "approve" ? "approved" : "auto",
+      updated_at: now,
+    }));
+  if (rows.length) must(await sb.from("scores").upsert(rows, { onConflict: "team_id,question_key" }));
+}
 
 // ───────────── game lifecycle ─────────────
+
+const DEMO_NAMES = ["Nissebanden", "Rensdyrene", "Pebernødderne", "Team Risalamande"];
+const NAME = "Den kæmpe store elite jule quiz";
 
 export async function createGame(teamCount: number, demo: boolean): Promise<Result> {
   return run(async () => {
     const sb = getAdminSupabase();
-    const realTeams = demo ? Math.min(4, Math.max(0, teamCount)) : Math.min(8, Math.max(1, teamCount));
-    const total = demo ? 4 + realTeams : realTeams;
-    if (total > 8) throw new Error("Maks 8 hold");
-
+    const real = demo ? Math.min(4, Math.max(0, teamCount)) : Math.min(8, Math.max(1, teamCount));
+    const total = demo ? 4 + real : real;
     must(await sb.from("games").update({ active: false }).eq("active", true));
     const { data: game } = must(
-      await sb
-        .from("games")
-        .insert({ name: demo ? "Demo – Den kæmpe store elite jule quiz" : "Den kæmpe store elite jule quiz", is_demo: demo })
-        .select("id")
-        .single(),
+      await sb.from("games").insert({ name: demo ? `Demo – ${NAME}` : NAME, is_demo: demo }).select("id").single(),
     );
-
-    const codes = uniqueCodes(total);
+    const codes = new Set<string>();
+    while (codes.size < total) codes.add(String(randomInt(1000, 10000)));
     const now = new Date().toISOString();
-    const rows = codes.map((code, i) => {
-      const isDemoTeam = demo && i < 4;
-      return {
-        game_id: game.id,
-        slot: i + 1,
-        join_code: code,
-        is_demo: isDemoTeam,
-        name: isDemoTeam ? DEMO_NAMES[i] : null,
-        joined_at: isDemoTeam ? now : null,
-      };
-    });
-    must(await sb.from("teams").insert(rows));
-
-    const first = QUIZ[0];
-    must(await sb.from("game_state").insert({ game_id: game.id, phase: "idle", ...questionFields(first), ...CLEARED }));
+    must(
+      await sb.from("teams").insert(
+        [...codes].map((code, i) => ({
+          game_id: game.id,
+          slot: i + 1,
+          join_code: code,
+          is_demo: demo && i < 4,
+          name: demo && i < 4 ? DEMO_NAMES[i] : null,
+          joined_at: demo && i < 4 ? now : null,
+        })),
+      ),
+    );
+    must(await sb.from("game_state").insert({ game_id: game.id, phase: "idle", ...CLEARED, ...questionFields(QUIZ[0]) }));
     revalidatePath("/admin");
   });
 }
@@ -170,178 +223,230 @@ export async function endGame(gameId: string): Promise<Result> {
 
 export async function showQuestion(gameId: string): Promise<Result> {
   return run(async () => {
-    const { q } = await currentQuestion(gameId);
+    const { q } = await current(gameId);
     await patchState(gameId, { ...CLEARED, ...shownFields(q), phase: "question" });
   });
 }
 
 export async function startTimer(gameId: string): Promise<Result> {
   return run(async () => {
-    const { q, phase } = await currentQuestion(gameId);
+    const { q, phase } = await current(gameId);
     if (phase === "idle") await patchState(gameId, { ...CLEARED, ...shownFields(q), phase: "question" });
-    // Timer end is computed with database time (single source of truth).
     must(await getAdminSupabase().rpc("start_timer", { p_game: gameId, p_seconds: q.timerSeconds }));
   });
 }
 
+/** Lock (manually or when the timer hits 0) → points are computed automatically. */
 export async function lockNow(gameId: string): Promise<Result> {
   return run(async () => {
+    const { q } = await current(gameId);
     must(await getAdminSupabase().rpc("lock_now", { p_game: gameId }));
+    await storeScores(gameId, q, "auto");
   });
 }
 
 export async function reveal(gameId: string): Promise<Result> {
   return run(async () => {
-    const { q, phase } = await currentQuestion(gameId);
-    if (phase === "countdown") must(await getAdminSupabase().rpc("lock_now", { p_game: gameId }));
+    const { q, phase } = await current(gameId);
+    if (phase === "countdown" || phase === "question") must(await getAdminSupabase().rpc("lock_now", { p_game: gameId }));
+    const revealMedia = q.revealMediaUrl && mediaKind(q.revealMediaUrl) !== "image" ? q.revealMediaUrl : null;
     await patchState(gameId, {
       ...shownFields(q),
+      ...(revealMedia ? { media_url: revealMedia, media_type: mediaKind(revealMedia) } : {}),
       phase: "reveal",
-      answer_text: q.answer,
-      answer_value: q.answerValue,
+      reveal_step: 1,
+      answer_text: META[q.answerType].answerText(q),
+      reveal_payload: {
+        ...META[q.answerType].revealPayload(q),
+        ...(q.answerType === "draw" ? { drawCount: await countDrawings(gameId, q.key) } : {}),
+      },
       media_command: "stop",
+      media_seek: null,
     });
-    if (q.scoring === "closest") await applyClosest(gameId, q, false);
+    // late answers (grace period) are included; approved/manual points are kept
+    await storeScores(gameId, q, "auto");
   });
 }
 
-/** Auto-award "closest" points. Without `force`, existing (possibly hand-corrected) points are kept. */
-async function applyClosest(gameId: string, q: QuizQuestion, force: boolean) {
-  if (q.answerValue === null) return;
-  const sb = getAdminSupabase();
-  const key = questionKey(q.round, q.index);
-  if (!force) {
-    const { count } = await sb
-      .from("scores")
-      .select("team_id", { count: "exact", head: true })
-      .eq("game_id", gameId)
-      .eq("question_key", key);
-    if ((count ?? 0) > 0) return;
-  }
-  const [{ data: teams }, { data: answers }] = await Promise.all([
-    sb.from("teams").select("id").eq("game_id", gameId).not("name", "is", null),
-    sb.from("answers").select("team_id, scale_value").eq("game_id", gameId).eq("question_key", key),
-  ]);
-  const values = new Map((answers ?? []).map((a) => [a.team_id as string, a.scale_value as number | null]));
-  const rows = closestScores(q, (teams ?? []).map((t) => t.id as string), values).map((r) => ({
-    game_id: gameId,
-    team_id: r.teamId,
-    question_key: key,
-    points: r.points,
-    updated_at: new Date().toISOString(),
-  }));
-  if (rows.length) must(await sb.from("scores").upsert(rows, { onConflict: "team_id,question_key" }));
+async function countDrawings(gameId: string, key: string) {
+  const { data } = await getAdminSupabase().from("answers").select("value").eq("game_id", gameId).eq("question_key", key);
+  return (data ?? []).filter((a) => typeof (a.value as { path?: unknown } | null)?.path === "string").length;
 }
 
-export async function recalcClosest(gameId: string): Promise<Result> {
+/** Stepwise reveal (e.g. geo: pins → facit → lines → ranking). */
+export async function advanceReveal(gameId: string): Promise<Result> {
   return run(async () => {
-    const { q } = await currentQuestion(gameId);
-    if (q.scoring !== "closest" || q.answerValue === null) throw new Error("Spørgsmålet bruger ikke tættest-point");
-    await applyClosest(gameId, q, true);
+    const { q, step, revealPayload } = await current(gameId);
+    const max = META[q.answerType].revealSteps(revealPayload);
+    await patchState(gameId, { reveal_step: Math.min(max, step + 1) });
   });
 }
 
 export async function showScoreboard(gameId: string): Promise<Result> {
-  return run(async () => {
-    await patchState(gameId, { phase: "scoreboard", media_command: "stop" });
-  });
+  return run(async () => patchState(gameId, { phase: "scoreboard", media_command: "stop" }));
 }
 
 export async function next(gameId: string): Promise<Result> {
   return run(async () => {
-    const { q } = await currentQuestion(gameId);
-    const n = nextQuestion(q.round, q.index);
-    if (!n) {
-      await patchState(gameId, { ...CLEARED, phase: "finished" });
-      return;
-    }
+    const { q } = await current(gameId);
+    const n = nextQuestion(q.key);
+    if (!n) return patchState(gameId, { ...CLEARED, phase: "finished" });
     await patchState(gameId, { ...CLEARED, ...questionFields(n), phase: "idle" });
   });
 }
 
-export async function gotoQuestion(gameId: string, round: number, index: number): Promise<Result> {
+export async function gotoQuestion(gameId: string, key: string): Promise<Result> {
   return run(async () => {
-    const q = findQuestion(round, index);
+    const q = findQuestion(key);
     if (!q) throw new Error("Ukendt spørgsmål");
     await patchState(gameId, { ...CLEARED, ...questionFields(q), phase: "idle" });
   });
 }
 
-export async function mediaCommand(gameId: string, cmd: MediaCommand): Promise<Result> {
+/** play (optionally from `seek` seconds; 0 = restart) · pause · stop – on the big screen only. */
+export async function mediaCommand(gameId: string, cmd: MediaCommand, seek: number | null = null): Promise<Result> {
   return run(async () => {
-    await patchState(gameId, { media_command: cmd, media_command_at: new Date().toISOString() });
+    const s = seek === null || !Number.isFinite(seek) ? null : Math.max(0, Math.min(3600, seek));
+    await patchState(gameId, { media_command: cmd, media_command_at: new Date().toISOString(), media_seek: s });
   });
 }
 
-// ───────────── scoring ─────────────
+// ───────────── points ─────────────
 
+/** Quizmaster override for one team on one question. */
 export async function setScore(gameId: string, teamId: string, qKey: string, points: number): Promise<Result> {
   return run(async () => {
-    const m = /^r(\d{1,2})-q(\d{1,2})$/.exec(qKey);
-    const q = m ? findQuestion(Number(m[1]), Number(m[2])) : null;
+    const q = findQuestion(qKey);
     if (!q) throw new Error("Ugyldigt spørgsmål");
-    const allowed = [0, 1, 2, 3].map((p) => p * q.pointMultiplier);
-    if (!allowed.includes(points)) throw new Error(`Point skal være ${allowed.join("/")}`);
+    if (!Number.isInteger(points) || Math.abs(points) > 50) throw new Error("Point skal være et heltal mellem −50 og 50");
+    const sb = getAdminSupabase();
+    const { data: prev } = await sb.from("scores").select("detail").eq("team_id", teamId).eq("question_key", qKey).maybeSingle();
     must(
-      await getAdminSupabase()
-        .from("scores")
-        .upsert(
-          { game_id: gameId, team_id: teamId, question_key: qKey, points, updated_at: new Date().toISOString() },
-          { onConflict: "team_id,question_key" },
-        ),
+      await sb.from("scores").upsert(
+        {
+          game_id: gameId,
+          team_id: teamId,
+          question_key: qKey,
+          round: q.round,
+          points,
+          detail: prev?.detail ?? null,
+          source: "manual",
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "team_id,question_key" },
+      ),
     );
   });
 }
 
-/** Remove all drawings for the current question (e.g. to re-run it). */
-export async function clearAnswers(gameId: string): Promise<Result> {
+/** "Beregn point": proposal for the current question (nothing is written). */
+export async function proposeScores(gameId: string): Promise<Result<ScoreResult[]>> {
   return run(async () => {
-    const sb = getAdminSupabase();
-    const { q } = await currentQuestion(gameId);
-    const key = questionKey(q.round, q.index);
-    const { data } = must(await sb.from("answers").select("image_path").eq("game_id", gameId).eq("question_key", key));
-    if (data.length) await sb.storage.from("answers").remove(data.map((a) => a.image_path));
-    must(await sb.from("answers").delete().eq("game_id", gameId).eq("question_key", key));
-    await patchState(gameId, {}); // bump updated_at → clients refetch answers
+    const { q } = await current(gameId);
+    return computeScores(gameId, q);
   });
 }
 
-// ───────────── demo mode ─────────────
-
-/** Upload a dummy drawing (generated in the admin browser) on behalf of a demo team. */
-export async function demoSubmit(
-  gameId: string,
-  teamId: string,
-  qKey: string,
-  dataUrl: string,
-  scaleValue: number | null = null,
-): Promise<Result> {
+/** "Godkend": write the proposal (keeps manual overrides, incl. text judgments). */
+export async function approveScores(gameId: string): Promise<Result> {
   return run(async () => {
+    const { q } = await current(gameId);
+    await storeScores(gameId, q, "approve");
+  });
+}
+
+/**
+ * Draw rounds: the quizmaster's judgment of one team's drawing – merged into answers.judgment:
+ * closest {read, invalid} · manual-parts {parts: [true,false,…]} · manual {points}. Points are recomputed.
+ */
+export async function judgeAnswer(gameId: string, teamId: string, judgment: Record<string, unknown>): Promise<Result> {
+  return run(async () => {
+    const { q } = await current(gameId);
+    if (q.answerType !== "draw") throw new Error("Kun for tegne-spørgsmål");
+    const clean: Record<string, unknown> = {};
+    if ("read" in judgment) clean.read = typeof judgment.read === "number" && Number.isFinite(judgment.read) ? judgment.read : null;
+    if ("invalid" in judgment) clean.invalid = judgment.invalid === true;
+    if ("parts" in judgment && Array.isArray(judgment.parts))
+      clean.parts = q.parts.map((_, i) => ((judgment.parts as unknown[])[i] === true ? true : (judgment.parts as unknown[])[i] === false ? false : null));
+    if ("points" in judgment) {
+      if (!q.manualPoints.includes(judgment.points as number)) throw new Error("Ugyldige point");
+      clean.points = judgment.points;
+    }
     const sb = getAdminSupabase();
-    const { data: team } = must(
-      await sb.from("teams").select("id, is_demo, game_id").eq("id", teamId).single(),
+    const { data: row } = must(
+      await sb.from("answers").select("judgment").eq("game_id", gameId).eq("question_key", q.key).eq("team_id", teamId).single(),
     );
-    if (!team.is_demo || team.game_id !== gameId) throw new Error("Kun demo-hold");
-    const m = /^data:image\/png;base64,(.+)$/.exec(dataUrl);
-    if (!m) throw new Error("Ugyldigt billede");
-    const bytes = Buffer.from(m[1], "base64");
-    if (bytes.length > 1_500_000) throw new Error("Billedet er for stort");
-    const path = answerPath(gameId, qKey, teamId);
-    must(await sb.storage.from("answers").upload(path, bytes, { contentType: "image/png", upsert: true }));
     must(
       await sb
         .from("answers")
-        .upsert(
-          {
-            game_id: gameId,
-            team_id: teamId,
-            question_key: qKey,
-            image_path: path,
-            scale_value: Number.isFinite(scaleValue) ? scaleValue : null,
-            submitted_at: new Date().toISOString(),
-          },
-          { onConflict: "team_id,question_key" },
-        ),
+        .update({ judgment: { ...((row.judgment as Record<string, unknown> | null) ?? {}), ...clean } })
+        .eq("game_id", gameId)
+        .eq("question_key", q.key)
+        .eq("team_id", teamId),
+    );
+    await storeScores(gameId, q, "judge");
+  });
+}
+
+// ───────────── answers ─────────────
+
+/** Live answer values for the current question (quizmaster only – clients can't read values before reveal). */
+export async function getLiveAnswers(gameId: string): Promise<Result<AnswerValue[]>> {
+  return run(async () => {
+    const { q } = await current(gameId);
+    const { data } = must(
+      await getAdminSupabase()
+        .from("answers")
+        .select("team_id, value, wager, judgment, submitted_at")
+        .eq("game_id", gameId)
+        .eq("question_key", q.key),
+    );
+    return data as AnswerValue[];
+  });
+}
+
+/** Delete all answers + computed points for the current question (e.g. to re-run it). */
+export async function clearAnswers(gameId: string): Promise<Result> {
+  return run(async () => {
+    const { q } = await current(gameId);
+    const sb = getAdminSupabase();
+    const { data: old } = await sb.from("answers").select("value").eq("game_id", gameId).eq("question_key", q.key);
+    const paths = (old ?? []).map((a) => (a.value as { path?: string } | null)?.path).filter((p): p is string => !!p);
+    if (paths.length) await sb.storage.from("answers").remove(paths);
+    must(await sb.from("answers").delete().eq("game_id", gameId).eq("question_key", q.key));
+    must(await sb.from("scores").delete().eq("game_id", gameId).eq("question_key", q.key).neq("source", "manual"));
+    await patchState(gameId, {}); // bump → clients refetch
+  });
+}
+
+/** Demo mode: answer on behalf of a simulated team (only while the question is open). */
+export async function demoSubmit(
+  gameId: string,
+  teamId: string,
+  value: unknown,
+  wager: number | null,
+  pngDataUrl: string | null = null,
+): Promise<Result> {
+  return run(async () => {
+    const sb = getAdminSupabase();
+    const { data: team } = must(await sb.from("teams").select("is_demo, game_id").eq("id", teamId).single());
+    if (!team.is_demo || team.game_id !== gameId) throw new Error("Kun demo-hold");
+    const { data: gs } = must(await sb.from("game_state").select("phase, question_key").eq("game_id", gameId).single());
+    if (gs.phase !== "countdown" && gs.phase !== "locked") throw new Error("Spørgsmålet er ikke åbent");
+    if (pngDataUrl) {
+      const m = /^data:image\/png;base64,(.+)$/.exec(pngDataUrl);
+      if (!m) throw new Error("Ugyldigt billede");
+      const bytes = Buffer.from(m[1], "base64");
+      if (bytes.length > 1_500_000) throw new Error("Billedet er for stort");
+      const path = `${gameId}/${gs.question_key}/${teamId}.png`;
+      must(await sb.storage.from("answers").upload(path, bytes, { contentType: "image/png", upsert: true }));
+      value = { path };
+    }
+    must(
+      await sb.from("answers").upsert(
+        { game_id: gameId, team_id: teamId, question_key: gs.question_key, value, wager, submitted_at: new Date().toISOString() },
+        { onConflict: "team_id,question_key" },
+      ),
     );
   });
 }

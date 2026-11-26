@@ -1,13 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { DrawingCanvas, type DrawingCanvasHandle } from "@/components/DrawingCanvas";
 import { Wordmark } from "@/components/Brand";
+import type { DrawingCanvasHandle } from "@/components/DrawingCanvas";
+import { REGISTRY } from "@/lib/answerTypes/registry";
 import { serverNow, useClockSync, useCountdown } from "@/lib/clock";
-import { getSupabase, publicImageUrl } from "@/lib/supabase/browser";
-import { rankTeams, useGame } from "@/lib/useGame";
-import { answerPath, formatScaleValue, multiplierLabel, stateScale } from "@/lib/types";
+import { getSupabase } from "@/lib/supabase/browser";
+import { multiplierLabel, publicQuestion, signed, teamColor, type GameState } from "@/lib/types";
+import { standings, useGame } from "@/lib/useGame";
 
 interface Session {
   code: string;
@@ -16,7 +17,7 @@ interface Session {
   gameId: string;
 }
 
-type SubmitStatus = "idle" | "uploading" | "submitted" | "empty" | "error";
+type SaveStatus = "idle" | "saving" | "saved" | "error" | "empty";
 
 async function ensureAuth() {
   const sb = getSupabase();
@@ -76,7 +77,7 @@ export function PlayClient() {
     let lock: { release: () => Promise<void> } | null = null;
     const req = async () => {
       try {
-        lock = await (navigator as unknown as { wakeLock?: { request: (t: string) => Promise<typeof lock> } }).wakeLock?.request("screen") ?? null;
+        lock = (await (navigator as unknown as { wakeLock?: { request: (t: string) => Promise<typeof lock> } }).wakeLock?.request("screen")) ?? null;
       } catch {}
     };
     req();
@@ -88,7 +89,12 @@ export function PlayClient() {
     };
   }, []);
 
-  if (booting) return <Shell><p className="text-center text-cream/60">Forbinder…</p></Shell>;
+  if (booting)
+    return (
+      <Shell>
+        <p className="text-center text-cream/60">Forbinder…</p>
+      </Shell>
+    );
   if (!session)
     return (
       <JoinForm
@@ -159,14 +165,7 @@ function JoinForm({ onJoined, initialError }: { onJoined: (s: Session) => void; 
         </label>
         <label className="block space-y-2">
           <span className="text-xs font-semibold uppercase tracking-[0.25em] text-gold">Holdnavn</span>
-          <input
-            className="field text-lg"
-            maxLength={40}
-            placeholder="Fx Nissebanden"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-          />
+          <input className="field text-lg" maxLength={40} placeholder="Fx Nissebanden" value={name} onChange={(e) => setName(e.target.value)} required />
         </label>
         {error && <p className="text-sm text-[#ffb4b6]">{error}</p>}
         <button className="btn btn-gold w-full py-3.5 text-base" disabled={busy || code.length !== 4 || !name.trim()}>
@@ -177,203 +176,54 @@ function JoinForm({ onJoined, initialError }: { onJoined: (s: Session) => void; 
   );
 }
 
+// ───────────────────────── answering ─────────────────────────
+
+const answerKey = (teamId: string, qKey: string) => `xmasquiz-answer:${teamId}:${qKey}`;
+
 function TeamScreen({ session, onLeave }: { session: Session; onLeave: () => void }) {
-  const { state, teams, answers, scores, totals } = useGame(session.gameId);
-  const canvas = useRef<DrawingCanvasHandle>(null);
-  const qKey = state?.question_key ?? null;
-  const phase = state?.phase ?? "idle";
-  const scale = stateScale(state);
-  const scaleSig = scale ? `${scale.min}|${scale.max}|${scale.unit}` : "";
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const scaleMemo = useMemo(() => scale, [scaleSig]);
-  const [liveValue, setLiveValue] = useState<{ qKey: string | null; v: number | null }>({ qKey: null, v: null });
-
-  const [sub, setSub] = useState<{ qKey: string | null; status: SubmitStatus; error?: string }>({ qKey: null, status: "idle" });
-  const status: SubmitStatus = sub.qKey === qKey ? sub.status : "idle";
-  const mine = answers.find((a) => a.team_id === session.teamId);
-  const submitted = !!mine || status === "submitted";
-  const busy = useRef<string | null>(null);
-
-  // Timer expiry computed locally (skew-compensated)
-  const [expiredFor, setExpiredFor] = useState<string | null>(null);
-  useEffect(() => {
-    if (phase !== "countdown" || !state?.timer_ends_at) return;
-    const tag = `${qKey}@${state.timer_ends_at}`;
-    const ms = Date.parse(state.timer_ends_at) - serverNow();
-    const id = setTimeout(() => setExpiredFor(tag), Math.max(0, ms));
-    return () => clearTimeout(id);
-  }, [phase, state?.timer_ends_at, qKey]);
-  const timeUp =
-    (phase === "countdown" && expiredFor === `${qKey}@${state?.timer_ends_at}`) || phase === "locked";
-
-  const submit = useCallback(
-    async (manual: boolean) => {
-      if (!qKey || busy.current === qKey || submitted) return;
-      const c = canvas.current;
-      if (!c) return;
-      if (!manual && !c.isDirty()) {
-        setSub({ qKey, status: "empty" });
-        return;
-      }
-      busy.current = qKey;
-      setSub({ qKey, status: "uploading" });
-      const sb = getSupabase();
-      const path = answerPath(session.gameId, qKey, session.teamId);
-      let lastErr = "";
-      try {
-        const blob = await c.toBlob();
-        const scaleValue = c.scaleValue();
-        for (let attempt = 0; attempt < 4; attempt++) {
-          if (attempt) await new Promise((r) => setTimeout(r, 700 * attempt));
-          const up = await sb.storage.from("answers").upload(path, blob, { contentType: "image/png", upsert: false });
-          const upErr = up.error as (Error & { statusCode?: string }) | null;
-          if (upErr && upErr.statusCode !== "409" && !/exists|duplicate/i.test(upErr.message)) {
-            lastErr = upErr.message;
-            continue;
-          }
-          const ins = await sb
-            .from("answers")
-            .insert({
-              game_id: session.gameId,
-              team_id: session.teamId,
-              question_key: qKey,
-              image_path: path,
-              scale_value: scaleValue,
-            });
-          if (ins.error && ins.error.code !== "23505") {
-            lastErr = ins.error.message;
-            continue;
-          }
-          setSub({ qKey, status: "submitted" });
-          try {
-            localStorage.removeItem("xmasquiz-canvas");
-          } catch {}
-          return;
-        }
-        setSub({ qKey, status: "error", error: lastErr });
-      } catch (e) {
-        setSub({ qKey, status: "error", error: e instanceof Error ? e.message : String(e) });
-      } finally {
-        busy.current = null;
-      }
-    },
-    [qKey, submitted, session.gameId, session.teamId],
-  );
-
-  // Auto-submit when the timer hits 0 or the quizmaster locks.
-  useEffect(() => {
-    if (!(timeUp && !submitted && status === "idle")) return;
-    const id = setTimeout(() => submit(false), 0);
-    return () => clearTimeout(id);
-  }, [timeUp, submitted, status, submit]);
-
+  const { state, teams, answers, scores, totals, scoreFor } = useGame(session.gameId);
+  const me = teams.find((t) => t.id === session.teamId);
+  const color = me ? teamColor(me.slot) : "#d9b97a";
   const myTotal = totals.get(session.teamId) ?? 0;
-  const myPoints = scores.find((s) => s.team_id === session.teamId && s.question_key === qKey)?.points;
-  const ranked = rankTeams(teams, totals);
-  const myRank = ranked.findIndex((t) => t.id === session.teamId) + 1;
-
-  const drawing = phase === "countdown" && !timeUp && !submitted && status !== "uploading";
-  const showCanvas = phase === "question" || phase === "countdown" || phase === "locked";
+  const myRank = standings(teams, scores).find((t) => t.id === session.teamId)?.rank ?? 0;
+  const myScore = state ? scoreFor(session.teamId, state.question_key) : undefined;
 
   return (
     <main className="no-overscroll flex h-[100dvh] flex-col gap-3 overflow-hidden p-3 sm:p-5">
       <header className="flex shrink-0 items-center justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate text-lg font-semibold leading-tight">{session.name}</p>
-          <p className="tabular text-xs text-gold">{myTotal} point{myRank > 0 && ` · nr. ${myRank}`}</p>
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: color }} />
+          <div className="min-w-0">
+            <p className="truncate text-lg font-semibold leading-tight">{session.name}</p>
+            <p className="tabular text-xs text-gold">
+              {myTotal} point{myRank > 0 && ` · nr. ${myRank}`}
+            </p>
+          </div>
         </div>
-        {phase === "countdown" && !timeUp && <MiniTimer endsAt={state!.timer_ends_at} total={state!.timer_seconds} />}
-        <button
-          onClick={() => confirm("Forlad holdet på denne enhed?") && onLeave()}
-          className="shrink-0 text-xs text-cream/40 underline-offset-2 hover:underline"
-        >
+        {state?.phase === "countdown" && <MiniTimer endsAt={state.timer_ends_at} total={state.timer_seconds} />}
+        <button onClick={() => confirm("Forlad holdet på denne enhed?") && onLeave()} className="shrink-0 text-xs text-cream/40 underline-offset-2 hover:underline">
           Skift hold
         </button>
       </header>
 
       {!state ? (
         <Center>Forbinder til spillet…</Center>
-      ) : showCanvas ? (
-        <>
-          <p className="shrink-0 text-center font-display text-2xl font-semibold leading-tight sm:text-3xl">
-            {state.question_text}
-          </p>
-          <div className="relative min-h-0 flex-1">
-            <DrawingCanvas
-              key={qKey}
-              ref={canvas}
-              disabled={!drawing}
-              persistKey={qKey ? `${session.teamId}:${qKey}` : null}
-              scale={scaleMemo}
-              onStroke={() => setLiveValue({ qKey, v: canvas.current?.scaleValue() ?? null })}
-            />
-            {!drawing && (
-              <div className="pointer-events-none absolute inset-x-0 top-1/2 -translate-y-1/2 text-center">
-                <span className="animate-pop inline-block rounded-full bg-pine-950/90 px-5 py-2.5 text-base font-semibold shadow-xl ring-1 ring-gold/40">
-                  {phase === "question"
-                    ? "Klar… tegningen starter med timeren"
-                    : submitted
-                      ? "Afleveret ✓"
-                      : status === "uploading"
-                        ? "Sender tegning…"
-                        : status === "empty"
-                          ? "Tiden er gået – intet afleveret"
-                          : status === "error"
-                            ? "Fejl ved aflevering"
-                            : "Tiden er gået"}
-                </span>
-              </div>
-            )}
-          </div>
-          {scale && (
-            <p className="shrink-0 text-center text-sm text-cream/70">
-              {liveValue.qKey === qKey && liveValue.v !== null ? (
-                <>
-                  Jeres kryds: <span className="font-bold text-gold">{formatScaleValue(liveValue.v, scale)}</span>
-                </>
-              ) : (
-                "Sæt ét kryds på skalaen – midten af krydset tæller"
-              )}
-            </p>
-          )}
-          {status === "error" && (
-            <div className="flex shrink-0 items-center justify-center gap-3 text-sm text-[#ffb4b6]">
-              {sub.error}
-              <button className="btn btn-ghost" onClick={() => { setSub({ qKey, status: "idle" }); submit(true); }}>
-                Prøv igen
-              </button>
-            </div>
-          )}
-          {phase === "countdown" && !submitted && !timeUp && (
-            <SendButton disabled={status === "uploading"} onSend={() => submit(true)} />
-          )}
-        </>
-      ) : phase === "reveal" ? (
+      ) : state.phase === "question" || state.phase === "countdown" || state.phase === "locked" ? (
+        <AnswerArea key={state.question_key} state={state} session={session} color={color} answered={answers.some((a) => a.team_id === session.teamId)} />
+      ) : state.phase === "reveal" ? (
         <Center>
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-gold">Facit</p>
           <p className="font-display text-4xl font-semibold">{state.answer_text}</p>
-          {mine && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={publicImageUrl(mine.image_path, mine.submitted_at)}
-              alt="Jeres tegning"
-              className="mt-4 max-h-[40vh] rounded-xl bg-white ring-1 ring-gold/30"
-            />
+          {myScore ? (
+            <p className="animate-pop mt-4 text-3xl font-bold text-gold">{signed(myScore.points)} point</p>
+          ) : (
+            <p className="mt-4 text-cream/50">Point kommer…</p>
           )}
-          {mine && mine.scale_value !== null && scale && (
-            <p className="text-cream/70">
-              Jeres gæt: <span className="font-semibold text-cream">{formatScaleValue(mine.scale_value, scale)}</span>
-            </p>
-          )}
-          {myPoints !== undefined && (
-            <p className="animate-pop mt-4 text-3xl font-bold text-gold">+{myPoints} point</p>
-          )}
+          <p className="mt-4 text-cream/50">Kig op på storskærmen</p>
         </Center>
-      ) : phase === "scoreboard" || phase === "finished" ? (
+      ) : state.phase === "scoreboard" || state.phase === "finished" ? (
         <Center>
-          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-gold">
-            {phase === "finished" ? "Slutstilling" : "Stilling"}
-          </p>
+          <p className="text-xs font-semibold uppercase tracking-[0.3em] text-gold">{state.phase === "finished" ? "Slutstilling" : "Stilling"}</p>
           <p className="font-display text-6xl font-semibold">{myRank > 0 ? `Nr. ${myRank}` : "–"}</p>
           <p className="tabular text-xl text-cream/80">{myTotal} point</p>
           <p className="mt-4 text-cream/50">Kig op på storskærmen</p>
@@ -385,9 +235,7 @@ function TeamScreen({ session, onLeave }: { session: Session; onLeave: () => voi
           </p>
           <p className="font-display text-4xl font-semibold">I er klar!</p>
           {state.point_multiplier > 1 && (
-            <p className="animate-pop rounded-full bg-gold px-4 py-1.5 text-sm font-bold uppercase tracking-widest text-ink">
-              {multiplierLabel(state.point_multiplier)}
-            </p>
+            <p className="animate-pop rounded-full bg-gold px-4 py-1.5 text-sm font-bold uppercase tracking-widest text-ink">{multiplierLabel(state.point_multiplier)}</p>
           )}
           <p className="text-cream/60">Kig op på storskærmen – næste spørgsmål kommer snart.</p>
         </Center>
@@ -396,32 +244,187 @@ function TeamScreen({ session, onLeave }: { session: Session; onLeave: () => voi
   );
 }
 
-function Center({ children }: { children: React.ReactNode }) {
-  return <div className="animate-fade-up flex flex-1 flex-col items-center justify-center gap-2 text-center">{children}</div>;
+function readLocal(key: string): { value: unknown; wager: number | null } {
+  try {
+    return JSON.parse(localStorage.getItem(key) ?? "null") ?? { value: null, wager: null };
+  } catch {
+    return { value: null, wager: null };
+  }
 }
 
-/** Two-tap send: first tap arms, second tap (within 3 s) sends. */
-function SendButton({ disabled, onSend }: { disabled: boolean; onSend: () => void }) {
-  const [armed, setArmed] = useState(false);
+/** One question: renders the type's PlayInput; saves answers (debounced, last value wins) or uploads the drawing at lock. */
+function AnswerArea({ state, session, color, answered }: { state: GameState; session: Session; color: string; answered: boolean }) {
+  const q = publicQuestion(state);
+  const ui = REGISTRY[q.answerType];
+  const storeKey = answerKey(session.teamId, q.key);
+  const canvas = useRef<DrawingCanvasHandle>(null);
+
+  const [local, setLocal] = useState(() => readLocal(storeKey));
+  const [status, setStatus] = useState<SaveStatus>("idle");
+  const [error, setError] = useState<string | null>(null);
+  const dirty = useRef(false);
+  const latest = useRef(local);
+  const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const finished = useRef(false);
+
+  // timer expiry (skew-compensated)
+  const [expired, setExpired] = useState(false);
   useEffect(() => {
-    if (!armed) return;
-    const id = setTimeout(() => setArmed(false), 3000);
+    if (state.phase !== "countdown" || !state.timer_ends_at) return;
+    const ms = Date.parse(state.timer_ends_at) - serverNow();
+    const id = setTimeout(() => setExpired(true), Math.max(0, ms));
     return () => clearTimeout(id);
-  }, [armed]);
+  }, [state.phase, state.timer_ends_at]);
+  const timeUp = state.phase === "locked" || (state.phase === "countdown" && expired);
+  const disabled = state.phase !== "countdown" || timeUp;
+
+  const save = useCallback(async () => {
+    const { value, wager } = latest.current;
+    if (value === null || value === undefined) return;
+    dirty.current = false;
+    setStatus("saving");
+    const { error: err } = await getSupabase().rpc("submit_answer", { p_team: session.teamId, p_value: value, p_wager: wager });
+    if (err) {
+      dirty.current = true;
+      setStatus("error");
+      setError(err.message);
+    } else {
+      setStatus("saved");
+      setError(null);
+    }
+  }, [session.teamId]);
+
+  const onChange = (value: unknown, wager?: number | null) => {
+    const next = { value: value ?? latest.current.value, wager: wager === undefined ? latest.current.wager : wager };
+    latest.current = next;
+    setLocal(next);
+    try {
+      localStorage.setItem(storeKey, JSON.stringify(next));
+    } catch {}
+    dirty.current = true;
+    if (debounce.current) clearTimeout(debounce.current);
+    debounce.current = setTimeout(save, 450);
+  };
+
+  /** draw: export the canvas → upload the PNG → register the answer. */
+  const uploadDrawing = useCallback(async () => {
+    const c = canvas.current;
+    if (!c) return;
+    if (!c.isDirty()) {
+      setStatus("empty");
+      return;
+    }
+    setStatus("saving");
+    const sb = getSupabase();
+    const path = `${session.gameId}/${q.key}/${session.teamId}.png`;
+    let last = "";
+    try {
+      const blob = await c.toBlob();
+      for (let attempt = 0; attempt < 4; attempt++) {
+        if (attempt) await new Promise((r) => setTimeout(r, 700 * attempt));
+        const up = await sb.storage.from("answers").upload(path, blob, { contentType: "image/png", upsert: false });
+        const upErr = up.error as (Error & { statusCode?: string }) | null;
+        if (upErr && upErr.statusCode !== "409" && !/exists|duplicate/i.test(upErr.message)) {
+          last = upErr.message;
+          continue;
+        }
+        const { error: err } = await sb.rpc("submit_answer", { p_team: session.teamId, p_value: { path }, p_wager: null });
+        if (err) {
+          last = err.message;
+          continue;
+        }
+        setStatus("saved");
+        try {
+          localStorage.removeItem("xmasquiz-canvas");
+        } catch {}
+        return;
+      }
+      setStatus("error");
+      setError(last);
+    } catch (e) {
+      setStatus("error");
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }, [q.key, session.gameId, session.teamId]);
+
+  // at lock: flush the last value / upload the drawing (once)
+  useEffect(() => {
+    if (!timeUp || finished.current) return;
+    finished.current = true;
+    if (debounce.current) clearTimeout(debounce.current);
+    const id = setTimeout(() => {
+      if (ui.submitOnLock) uploadDrawing();
+      else if (dirty.current) save();
+    }, 0);
+    return () => clearTimeout(id);
+  }, [timeUp, ui.submitOnLock, uploadDrawing, save]);
+
+  const Input = ui.PlayInput;
+  const banner =
+    state.phase === "question"
+      ? "Klar… I kan svare, når timeren starter"
+      : timeUp
+        ? status === "saving"
+          ? ui.submitOnLock
+            ? "Sender tegningen…"
+            : "Gemmer…"
+          : status === "empty"
+            ? "Tiden er gået – intet afleveret"
+            : status === "error"
+              ? "Fejl ved aflevering"
+              : answered || status === "saved"
+                ? "Tiden er gået · svaret ✓"
+                : "Tiden er gået"
+        : null;
+
   return (
-    <button
-      className={`btn h-14 shrink-0 text-lg ${armed ? "btn-danger bg-alarm/20" : "btn-gold"}`}
-      disabled={disabled}
-      onClick={() => {
-        if (armed) {
-          setArmed(false);
-          onSend();
-        } else setArmed(true);
-      }}
-    >
-      {armed ? "Tryk igen for at sende – kan ikke fortrydes" : "Send svar"}
-    </button>
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
+      {q.showTextOnPlay && q.text && (
+        <p className={`shrink-0 text-center font-display font-semibold leading-tight ${q.text.length > 120 ? "text-xl" : "text-2xl sm:text-3xl"}`}>{q.text}</p>
+      )}
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <Input
+          q={q}
+          value={local.value}
+          wager={local.wager}
+          onChange={onChange}
+          disabled={disabled}
+          color={color}
+          canvasRef={canvas}
+          persistKey={ui.submitOnLock ? `${session.teamId}:${q.key}` : null}
+        />
+        {banner && (
+          <div className="pointer-events-none absolute inset-x-0 top-1/2 z-[600] -translate-y-1/2 text-center">
+            <span className="animate-pop inline-block rounded-full bg-pine-950/90 px-5 py-2.5 text-base font-semibold shadow-xl ring-1 ring-gold/40">{banner}</span>
+          </div>
+        )}
+      </div>
+      <div className="flex min-h-6 shrink-0 items-center justify-center gap-3 text-sm">
+        {status === "error" ? (
+          <>
+            <span className="text-[#ffb4b6]">{error}</span>
+            <button className="btn btn-ghost" onClick={() => (ui.submitOnLock ? uploadDrawing() : save())}>
+              Prøv igen
+            </button>
+          </>
+        ) : !timeUp && state.phase === "countdown" ? (
+          ui.submitOnLock ? (
+            <span className="text-cream/50">Tegningen afleveres automatisk, når tiden er gået</span>
+          ) : status === "saving" ? (
+            <span className="text-cream/60">Gemmer…</span>
+          ) : status === "saved" || answered ? (
+            <span className="text-emerald-300">Svar gemt ✓ – I kan ændre det, indtil tiden er gået</span>
+          ) : (
+            <span className="text-cream/50">Vælg jeres svar</span>
+          )
+        ) : null}
+      </div>
+    </div>
   );
+}
+
+function Center({ children }: { children: React.ReactNode }) {
+  return <div className="animate-fade-up flex flex-1 flex-col items-center justify-center gap-2 text-center">{children}</div>;
 }
 
 function MiniTimer({ endsAt, total }: { endsAt: string | null; total: number | null }) {
@@ -432,14 +435,9 @@ function MiniTimer({ endsAt, total }: { endsAt: string | null; total: number | n
   return (
     <div className="flex items-center gap-2">
       <div className="h-2 w-24 overflow-hidden rounded-full bg-pine-800 sm:w-40">
-        <div
-          className={`h-full rounded-full ${urgent ? "bg-alarm" : "bg-gold"}`}
-          style={{ width: `${Math.max(0, Math.min(1, frac)) * 100}%` }}
-        />
+        <div className={`h-full rounded-full ${urgent ? "bg-alarm" : "bg-gold"}`} style={{ width: `${Math.max(0, Math.min(1, frac)) * 100}%` }} />
       </div>
-      <span className={`tabular w-10 text-right text-2xl font-bold ${urgent ? "animate-pulse text-[#ff8a8d]" : "text-cream"}`}>
-        {secs}
-      </span>
+      <span className={`tabular w-10 text-right text-2xl font-bold ${urgent ? "animate-pulse text-[#ff8a8d]" : "text-cream"}`}>{secs}</span>
     </div>
   );
 }
