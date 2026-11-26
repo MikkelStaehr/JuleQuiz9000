@@ -20,6 +20,9 @@ import {
  */
 const COMMON = new Set(["key", "text", "mediaType", "mediaUrl", "timerSeconds", "answer", "showTextOnPlay", "revealMediaUrl", "unit", "parts", "source"]);
 
+/** An uploaded/linked media file: absolute http(s) URL or a site path like /media/x.jpg */
+export const isMediaUrl = (u: string) => /^(https?:\/\/\S+|\/\S+)$/.test(u.trim());
+
 const isStrList = (v: unknown): v is string[] => Array.isArray(v) && v.every((s) => typeof s === "string");
 const isNumList = (v: unknown): v is number[] => Array.isArray(v) && v.every((n) => typeof n === "number" && Number.isFinite(n));
 
@@ -66,6 +69,9 @@ export function parseQuiz(input: unknown): Question[] {
       const mediaType = (q.mediaType as MediaType | undefined) ?? "none";
       if (!["none", "image", "audio", "video"].includes(mediaType)) throw qfail("mediaType");
       if (mediaType !== "none" && typeof q.mediaUrl !== "string") throw qfail("mediaUrl mangler");
+      for (const f of ["mediaUrl", "revealMediaUrl"] as const)
+        if (typeof q[f] === "string" && q[f] && !isMediaUrl(q[f] as string))
+          throw qfail(`“${q[f]}” er ikke en adresse til et medie (https://… eller /media/…). Kilder skrives i feltet “Kilde”.`);
       const timer = (q.timerSeconds as number | undefined) ?? defTimer;
       if (!Number.isInteger(timer) || timer < 5) throw qfail("timerSeconds");
       const parts = q.parts ?? r.parts ?? [];

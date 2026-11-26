@@ -631,9 +631,18 @@ function guessKind(url: string | null | undefined): Media {
   return "image";
 }
 
+const looksLikeUrl = (u: string) => /^(https?:\/\/\S+|\/\S+)$/.test(u.trim());
+
 function MediaField({ label, url, mediaType, onChange }: { label: string; url: string | null; mediaType: Media; onChange: (url: string | null, kind: Media) => void }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [urlText, setUrlText] = useState(url ?? "");
+  const [seenUrl, setSeenUrl] = useState(url);
+  if (url !== seenUrl) {
+    // the url changed from outside (upload / remove) → show it
+    setSeenUrl(url);
+    setUrlText(url ?? "");
+  }
   const fileRef = useRef<HTMLInputElement>(null);
 
   const upload = async (file: File) => {
@@ -688,9 +697,18 @@ function MediaField({ label, url, mediaType, onChange }: { label: string; url: s
       <div className="flex items-center gap-2">
         <input
           className="field min-w-0 flex-1 py-1.5 text-xs"
-          placeholder="…eller indsæt en URL"
-          value={url ?? ""}
-          onChange={(e) => onChange(e.target.value || null, guessKind(e.target.value))}
+          placeholder="…eller indsæt en URL (https://…)"
+          value={urlText}
+          onChange={(e) => {
+            setUrlText(e.target.value);
+            setErr(null);
+          }}
+          onBlur={() => {
+            const v = urlText.trim();
+            if (!v) return onChange(null, "none");
+            if (!looksLikeUrl(v)) return setErr("Det er ikke en adresse. Er det en kilde (fx “YouGov, 2021”)? Så skriv den i feltet “Kilde” længere nede.");
+            onChange(v, guessKind(v));
+          }}
         />
         {url && (
           <button type="button" className="btn btn-ghost px-3 py-1.5 text-xs" onClick={() => fileRef.current?.click()}>

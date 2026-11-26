@@ -136,7 +136,7 @@ export function DisplayClient() {
       )}
 
       {state && state.phase !== "idle" && state.phase !== "finished" && (
-        <header className="flex shrink-0 items-center justify-between px-[3vw] pt-[2.4vh]">
+        <header className="flex shrink-0 flex-wrap items-center justify-between gap-x-[2vw] gap-y-[1vh] px-[3vw] pt-[2.4vh]">
           <div className="flex items-center gap-[1.2vw]">
             <Wordmark size="sm" />
             {state.point_multiplier > 1 && <MultiplierBadge m={state.point_multiplier} small />}
@@ -233,12 +233,14 @@ function RoundIntro({ state, teams, origin, showJoin }: { state: GameState; team
 }
 
 function Media({ state, audioPlaying, compact }: { state: GameState; audioPlaying: boolean; compact: boolean }) {
-  if (!state.media_url || state.media_type === "none") return null;
+  const [broken, setBroken] = useState<string | null>(null);
+  if (!state.media_url || state.media_type === "none" || broken === state.media_url) return null;
   if (state.media_type === "image")
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
         src={state.media_url}
+        onError={() => setBroken(state.media_url)}
         alt=""
         className={`mx-auto rounded-[1.2vmin] object-contain shadow-[0_3vh_6vh_-3vh_rgba(0,0,0,0.8)] ring-1 ring-gold/25 ${
           compact ? "max-h-[48vh] max-w-[46vw]" : "max-h-[54vh] max-w-[76vw]"
