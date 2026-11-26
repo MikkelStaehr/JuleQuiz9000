@@ -7,7 +7,7 @@ import type { Game, TeamWithCode } from "@/lib/types";
 import { AdminPanel } from "./AdminPanel";
 import { LoginForm } from "./LoginForm";
 
-export const metadata: Metadata = { title: "Quizmaster · UBS Christmas Quiz 2026" };
+export const metadata: Metadata = { title: "Quizmaster · Den kæmpe store elite jule quiz" };
 
 export default function AdminPage() {
   return (

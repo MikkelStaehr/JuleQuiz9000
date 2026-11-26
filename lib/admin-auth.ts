@@ -8,7 +8,7 @@ function expectedToken(): string | null {
   const pw = process.env.ADMIN_PASSWORD;
   if (!pw) return null;
   // Token is derived from the password: changing ADMIN_PASSWORD logs everyone out.
-  return createHmac("sha256", pw).update("ubs-christmas-quiz-admin-v1").digest("hex");
+  return createHmac("sha256", pw).update("elite-julequiz-admin-v1").digest("hex");
 }
 
 function safeEqual(a: string, b: string) {

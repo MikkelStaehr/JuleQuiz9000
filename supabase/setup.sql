@@ -1,7 +1,7 @@
--- Combined setup: paste everything into Supabase → SQL Editor → Run
+-- Combined setup for a NEW Supabase project: paste everything into SQL Editor → Run
 
 -- ════════ supabase/migrations/20261126120000_init.sql ════════
--- UBS Christmas Quiz 2026 – initial schema
+-- Den kæmpe store elite jule quiz – initial schema
 -- Tables: games, teams, game_state, answers, scores
 -- Teams authenticate with Supabase anonymous sign-in and claim a team via join_team(code, name).
 -- All quizmaster writes go through the Next.js server (service role), which bypasses RLS.
@@ -10,7 +10,7 @@
 
 create table public.games (
   id          uuid primary key default gen_random_uuid(),
-  name        text not null default 'UBS Christmas Quiz 2026',
+  name        text not null default 'Den kæmpe store elite jule quiz',
   active      boolean not null default true,
   is_demo     boolean not null default false,
   created_at  timestamptz not null default now()
@@ -272,4 +272,9 @@ alter table public.scores add constraint scores_points_check check (points betwe
 -- Teams may only send a finite scale value (or none).
 alter table public.answers add constraint answers_scale_value_finite
   check (scale_value is null or (scale_value > -1e9 and scale_value < 1e9));
+
+-- ════════ supabase/migrations/20261126140000_rename_quiz.sql ════════
+-- Rename: "Den kæmpe store elite jule quiz" (only the default game name; the app always sets it explicitly).
+alter table public.games alter column name set default 'Den kæmpe store elite jule quiz';
+update public.games set name = replace(replace(name, 'UBS Christmas Quiz 2026', 'Den kæmpe store elite jule quiz'), 'Demo – UBS', 'Demo –');
 

@@ -133,7 +133,7 @@ export async function createGame(teamCount: number, demo: boolean): Promise<Resu
     const { data: game } = must(
       await sb
         .from("games")
-        .insert({ name: demo ? "Demo – UBS Christmas Quiz 2026" : "UBS Christmas Quiz 2026", is_demo: demo })
+        .insert({ name: demo ? "Demo – Den kæmpe store elite jule quiz" : "Den kæmpe store elite jule quiz", is_demo: demo })
         .select("id")
         .single(),
     );

@@ -10,7 +10,7 @@ const cormorant = Cormorant_Garamond({
 });
 
 export const metadata: Metadata = {
-  title: "UBS Christmas Quiz 2026",
+  title: "Den kæmpe store elite jule quiz",
   description: "Live julequiz – tegn jeres svar!",
 };
 

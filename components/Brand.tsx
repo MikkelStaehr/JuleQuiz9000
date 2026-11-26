@@ -9,18 +9,18 @@ export function Star({ className = "" }: { className?: string }) {
   );
 }
 
-/** "UBS CHRISTMAS QUIZ 2026" wordmark. */
+/** "DEN KÆMPE STORE ELITE JULE QUIZ" wordmark. */
 export function Wordmark({ size = "md" }: { size?: "sm" | "md" | "xl" }) {
   const cls =
     size === "xl"
-      ? "text-[5.2vw] tracking-[0.18em]"
+      ? "text-[3.9vw] tracking-[0.14em]"
       : size === "sm"
-        ? "text-sm tracking-[0.3em]"
-        : "text-2xl tracking-[0.22em] sm:text-3xl";
+        ? "text-[13px] tracking-[0.2em]"
+        : "text-xl tracking-[0.16em] sm:text-2xl";
   return (
     <div className="flex items-center justify-center gap-[0.6em] text-gold">
       <Star className={size === "xl" ? "h-[2.4vw] w-[2.4vw]" : size === "sm" ? "h-3 w-3" : "h-5 w-5"} />
-      <span className={`font-display font-semibold uppercase leading-none [font-variant-numeric:lining-nums] ${cls}`}>UBS Christmas Quiz 2026</span>
+      <span className={`font-display font-semibold uppercase leading-none text-balance text-center ${cls}`}>Den kæmpe store elite jule quiz</span>
       <Star className={size === "xl" ? "h-[2.4vw] w-[2.4vw]" : size === "sm" ? "h-3 w-3" : "h-5 w-5"} />
     </div>
   );

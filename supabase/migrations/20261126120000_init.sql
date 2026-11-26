@@ -1,4 +1,4 @@
--- UBS Christmas Quiz 2026 – initial schema
+-- Den kæmpe store elite jule quiz – initial schema
 -- Tables: games, teams, game_state, answers, scores
 -- Teams authenticate with Supabase anonymous sign-in and claim a team via join_team(code, name).
 -- All quizmaster writes go through the Next.js server (service role), which bypasses RLS.
@@ -7,7 +7,7 @@
 
 create table public.games (
   id          uuid primary key default gen_random_uuid(),
-  name        text not null default 'UBS Christmas Quiz 2026',
+  name        text not null default 'Den kæmpe store elite jule quiz',
   active      boolean not null default true,
   is_demo     boolean not null default false,
   created_at  timestamptz not null default now()

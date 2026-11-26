@@ -1,4 +1,4 @@
-# UBS Christmas Quiz 2026
+# Den kæmpe store elite jule quiz
 
 Live julequiz, hvor holdene **tegner** deres svar. Next.js 16 (App Router, TypeScript, Tailwind v4) på Vercel, med Supabase (Postgres, Realtime og Storage) som backend. Der er ingen separat server.
 
