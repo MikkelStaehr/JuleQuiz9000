@@ -86,6 +86,34 @@ export function AdminPanel({ quiz, initialGame, teamCodes }: { quiz: Question[];
   }, [gameId, phase, state?.timer_ends_at, qKey]);
 
   // ── demo: the simulated teams answer (and sometimes change their mind) ──
+  // ── automatic reveal: all steps play by themselves, then the scoreboard ──
+  const [autoReveal, setAutoReveal] = useState(() => {
+    try {
+      return localStorage.getItem("xmasquiz-autoreveal") !== "off";
+    } catch {
+      return true;
+    }
+  });
+  const toggleAuto = (v: boolean) => {
+    setAutoReveal(v);
+    try {
+      localStorage.setItem("xmasquiz-autoreveal", v ? "on" : "off");
+    } catch {}
+  };
+  const autoStep = state?.reveal_step ?? 0;
+  const autoSteps = q && phase === "reveal" ? META[q.answerType].revealSteps(state?.reveal_payload ?? null) : 0;
+  const autoDrawCount = Number(state?.reveal_payload?.drawCount ?? 0);
+  useEffect(() => {
+    if (!autoReveal || phase !== "reveal" || !gameId || !q || autoSteps === 0) return;
+    const last = autoStep >= autoSteps;
+    const delay = last ? AUTO_MS.last : q.answerType === "draw" && autoStep <= autoDrawCount ? AUTO_MS.drawing : AUTO_MS.step;
+    const id = setTimeout(() => {
+      if (last) A.showScoreboard(gameId, qKey);
+      else A.advanceReveal(gameId, autoStep);
+    }, delay);
+    return () => clearTimeout(id);
+  }, [autoReveal, phase, gameId, q, qKey, autoStep, autoSteps, autoDrawCount]);
+
   const demoDone = useRef(new Set<string>());
   const demoCount = teams.filter((t) => t.is_demo).length;
   useEffect(() => {
@@ -129,6 +157,14 @@ export function AdminPanel({ quiz, initialGame, teamCodes }: { quiz: Question[];
   if (!game) return <Setup act={act} pending={pending} error={error} />;
 
   const answeredIds = new Set(answers.map((a) => a.team_id));
+  // draw/closest: drawings that still need a read value (or "ugyldig") before the ranking is complete
+  const unread =
+    q?.answerType === "draw" && q.scoring === "closest" && phase === "locked"
+      ? liveRows.filter((a) => {
+          const j = (a.judgment ?? {}) as { read?: unknown; invalid?: boolean };
+          return (a.value as { path?: string } | null)?.path && !j.invalid && typeof j.read !== "number";
+        }).length
+      : 0;
   const steps = q && phase === "reveal" ? META[q.answerType].revealSteps(state?.reveal_payload ?? null) : 1;
   const step = state?.reveal_step ?? 0;
   const moreSteps = phase === "reveal" && step < steps;
@@ -234,7 +270,16 @@ export function AdminPanel({ quiz, initialGame, teamCodes }: { quiz: Question[];
             <button className={btn("show")} disabled={pending || !can.show} onClick={() => act(() => A.showQuestion(game.id))}>Vis spørgsmål</button>
             <button className={btn("start")} disabled={pending || !can.start} onClick={() => act(() => A.startTimer(game.id))}>Start timer</button>
             <button className={btn("lock")} disabled={pending || !can.lock} onClick={() => act(() => A.lockNow(game.id))}>Lås nu</button>
-            <button className={btn("reveal")} disabled={pending || !can.reveal} onClick={() => act(() => A.reveal(game.id))}>Vis svar</button>
+            <button
+              className={btn("reveal")}
+              disabled={pending || !can.reveal}
+              onClick={() => {
+                if (unread > 0 && !window.confirm(`${unread} tegning(er) er ikke aflæst endnu – ranglisten bliver ufuldstændig. Vis svar alligevel?`)) return;
+                act(() => A.reveal(game.id));
+              }}
+            >
+              Vis svar
+            </button>
             <button
               className={btn("next")}
               disabled={pending || !can.next}
@@ -243,6 +288,18 @@ export function AdminPanel({ quiz, initialGame, teamCodes }: { quiz: Question[];
               {moreSteps ? `Næste trin (${step + 1}/${steps})` : "Næste"}
             </button>
             <button className={btn("board")} disabled={pending || !can.board} onClick={() => act(() => A.showScoreboard(game.id))}>Scoreboard</button>
+            <label className="col-span-full flex cursor-pointer items-center gap-3 border-t border-gold/15 pt-4 text-sm">
+              <input type="checkbox" className="h-4 w-4 accent-[#d9b97a]" checked={autoReveal} onChange={(e) => toggleAuto(e.target.checked)} />
+              <span>
+                <b>Automatisk afsløring</b>
+                <span className="text-cream/50"> – “Vis svar” kører alle trin og slutter på stillingen</span>
+              </span>
+              {autoReveal && phase === "reveal" && (
+                <span className="ml-auto rounded-full bg-gold/15 px-2 py-0.5 text-xs text-gold">
+                  {step >= steps ? "stilling om lidt…" : `trin ${step}/${steps} kører…`}
+                </span>
+              )}
+            </label>
             {state && (state.media_type === "audio" || state.media_type === "video") && <MediaControls gameId={game.id} state={state} act={act} />}
           </div>
 
@@ -355,6 +412,9 @@ export function AdminPanel({ quiz, initialGame, teamCodes }: { quiz: Question[];
 }
 
 const rand = (a: number, b: number) => a + Math.random() * (b - a);
+
+/** Automatic reveal timing (ms): per drawing shown one at a time · other steps · last step before the scoreboard. */
+const AUTO_MS = { drawing: 3500, step: 4500, last: 7000 };
 
 function pointsRule(q: Question) {
   const m = q.pointMultiplier > 1 ? ` × ${q.pointMultiplier}` : "";

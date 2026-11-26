@@ -327,16 +327,36 @@ async function countDrawings(gameId: string, key: string) {
 }
 
 /** Stepwise reveal (e.g. geo: pins → facit → lines → ranking). */
-export async function advanceReveal(gameId: string): Promise<Result> {
+/**
+ * Next reveal step. `fromStep` (auto sequence): only advance if we are still on that step,
+ * so two open admin tabs can't skip steps.
+ */
+export async function advanceReveal(gameId: string, fromStep?: number): Promise<Result> {
   return run(async () => {
-    const { q, step, revealPayload } = await current(gameId);
+    const { q, step, phase, revealPayload } = await current(gameId);
+    if (phase !== "reveal") return;
+    if (fromStep !== undefined && step !== fromStep) return;
     const max = META[q.answerType].revealSteps(revealPayload);
-    await patchState(gameId, { reveal_step: Math.min(max, step + 1) });
+    if (step >= max) return;
+    must(
+      await getAdminSupabase()
+        .from("game_state")
+        .update({ reveal_step: step + 1, updated_at: new Date().toISOString() })
+        .eq("game_id", gameId)
+        .eq("reveal_step", step),
+    );
   });
 }
 
-export async function showScoreboard(gameId: string): Promise<Result> {
-  return run(async () => patchState(gameId, { phase: "scoreboard", media_command: "stop" }));
+/** Scoreboard. `afterRevealOf` (auto sequence): only if that question's reveal is still on screen. */
+export async function showScoreboard(gameId: string, afterRevealOf?: string): Promise<Result> {
+  return run(async () => {
+    if (afterRevealOf) {
+      const { data } = must(await getAdminSupabase().from("game_state").select("phase, question_key").eq("game_id", gameId).single());
+      if (data.phase !== "reveal" || data.question_key !== afterRevealOf) return;
+    }
+    await patchState(gameId, { phase: "scoreboard", media_command: "stop" });
+  });
 }
 
 export async function next(gameId: string): Promise<Result> {

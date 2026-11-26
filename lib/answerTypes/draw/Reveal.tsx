@@ -43,7 +43,7 @@ export default function DrawReveal({ reveal, answerText, step, teams, answers, s
   if (step >= 1 && step <= n) {
     const e = entries[step - 1];
     return (
-      <div key={step} className="flex min-h-0 flex-1 flex-col items-center justify-center gap-[2vh] px-[3vw] pb-[3vh]">
+      <div key={step} className="flex min-h-0 w-full flex-1 flex-col items-center justify-center gap-[2vh] px-[3vw] pb-[3vh]">
         <div className="drawing-zoom relative w-[min(80vw,calc(70vh*10/7))] overflow-hidden rounded-[1.4vmin] bg-white shadow-[0_3vh_8vh_-3vh_rgba(0,0,0,0.8)]">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={publicImageUrl(e.path, e.answer.submitted_at)} alt={`Tegning fra ${e.team.name}`} className="aspect-[10/7] w-full object-contain" />
@@ -77,7 +77,7 @@ export default function DrawReveal({ reveal, answerText, step, teams, answers, s
       1e-9,
     );
     return (
-      <div className="flex flex-1 flex-col items-center justify-center gap-[2vh]">
+      <div className="flex w-full flex-1 flex-col items-center justify-center gap-[2vh]">
         <p className="rounded-full bg-gold px-[2vw] py-[0.8vh] text-[2vw] font-bold text-ink">Facit: {answerText}</p>
         <ol className="animate-fade-up grid w-[80vw] grid-cols-2 gap-x-[2vw] gap-y-[1vh]">
           {ranked.map((r) => {
@@ -109,7 +109,7 @@ export default function DrawReveal({ reveal, answerText, step, teams, answers, s
   const rows = Math.ceil(Math.max(1, n) / cols);
   const cardW = `((${(66 / rows).toFixed(2)}vh - 7vh) / 0.7)`;
   return (
-    <div className="flex min-h-0 flex-1 flex-col items-center gap-[2vh] px-[3vw] pb-[3vh]">
+    <div className="flex min-h-0 w-full flex-1 flex-col items-center gap-[2vh] px-[3vw] pb-[3vh]">
       <div className={`rounded-[1.2vmin] px-[2.4vw] py-[1vh] ${showFacit ? "animate-pop bg-gold text-ink" : "invisible"}`}>
         <span className="mr-[1vw] text-[1.2vw] font-semibold uppercase tracking-[0.25em]">Facit</span>
         <span className="text-[2.6vw] font-black">{answerText}</span>

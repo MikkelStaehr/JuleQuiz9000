@@ -77,8 +77,10 @@ export function DisplayClient() {
         const q = publicQuestion(state);
         const Reveal = REGISTRY[q.answerType].Reveal;
         body = (
-          <div className="flex min-h-0 flex-1 flex-col items-center px-[3vw] pb-[3vh] pt-[1vh]">
-            {q.answerType !== "geo" && <p className="mb-[1vh] max-w-[88vw] text-center font-display text-[2.4vw] leading-tight text-cream/85">{q.text}</p>}
+          <div className="flex min-h-0 w-full flex-1 flex-col px-[3vw] pb-[3vh] pt-[1vh]">
+            {q.answerType !== "geo" && (
+              <p className="mb-[1vh] max-w-[88vw] self-center text-center font-display text-[2.4vw] leading-tight text-cream/85">{q.text}</p>
+            )}
             <Reveal
               q={q}
               reveal={state.reveal_payload ?? {}}
@@ -91,7 +93,7 @@ export function DisplayClient() {
             />
             {typeof state.reveal_payload?.source === "string" &&
               state.reveal_step >= (state.answer_type === "draw" ? Number(state.reveal_payload?.drawCount ?? 0) + 2 : 2) && (
-              <p className="animate-fade-up mt-[1vh] text-[1.2vw] text-cream/55">Kilde: {state.reveal_payload.source}</p>
+              <p className="animate-fade-up mt-[1vh] self-center text-[1.2vw] text-cream/55">Kilde: {state.reveal_payload.source}</p>
             )}
           </div>
         );

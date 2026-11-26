@@ -118,7 +118,7 @@ export function TrueFalseReveal({ reveal, answerText, step, teams, answers, scor
     );
 
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-[3vh]">
+    <div className="flex w-full flex-1 flex-col items-center justify-center gap-[3vh]">
       <div className={`rounded-[1.2vmin] px-[3vw] py-[1.4vh] ${step >= 2 ? "animate-pop bg-gold text-ink" : "invisible"}`}>
         <span className="mr-[1vw] text-[1.3vw] font-semibold uppercase tracking-[0.25em]">Facit</span>
         <span className="text-[3vw] font-black tracking-wider">{answerText}</span>
