@@ -129,13 +129,19 @@
       "questions": [
         {
           "key": "r6q1",
-          "text": "“Tør, overpyntet og drysser over det hele allerede efter tre dage. Duften er dog himmelsk.” ★★☆☆☆☆",
+          "text": "Tør, overpyntet og drysser over det hele allerede efter tre dage. Duften er dog himmelsk.",
           "mediaType": "none",
           "mediaUrl": null,
           "showTextOnPlay": true,
-          "answer": "Et juletræ"
+          "answer": "Et juletræ",
+          "review": {
+            "author": "Birthe K.",
+            "rating": 2,
+            "date": "for 2 uger siden"
+          }
         }
-      ]
+      ],
+      "reviewStyle": "google"
     },
     {
       "number": 7,

@@ -4,9 +4,12 @@ import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "
 import { RoundLabel, Star, Wordmark } from "@/components/Brand";
 import { CountryBanner } from "@/components/Flag";
 import { Confetti, RoundWinner, Sleigh, Snowfall, Stamp, type RoundWinnerTeam } from "@/components/Fun";
+import { ReviewCard } from "@/components/ReviewCard";
 import { Scoreboard } from "@/components/Scoreboard";
 import { TimerRing } from "@/components/TimerRing";
 import { REGISTRY } from "@/lib/answerTypes/registry";
+import { splitHeadline } from "@/lib/headline";
+import { asReview } from "@/lib/review";
 import { useClockSync } from "@/lib/clock";
 import { fanfare, unlockAudio } from "@/lib/sound";
 import { multiplierLabel, publicQuestion, teamColor, type AnswerStatus, type GameState, type Score, type Team } from "@/lib/types";
@@ -85,8 +88,12 @@ export function DisplayClient() {
                 <CountryBanner code={countryOf(q.payload)!} size="md" />
               </div>
             )}
-            {q.answerType !== "geo" && (
-              <p className="mb-[1vh] max-w-[88vw] self-center text-center font-display text-[2.4vw] leading-tight text-cream/85">{q.text}</p>
+            {asReview(q.payload.review) ? (
+              <ReviewCard review={asReview(q.payload.review)!} text={q.text} compact fontSize="min(1.5vw,2.3vh)" className="mb-[1.5vh] self-center" />
+            ) : (
+              q.answerType !== "geo" && (
+                <RevealQuestionText text={q.text} headline={q.payload.headline} />
+              )
             )}
             <Reveal
               q={q}
@@ -213,6 +220,41 @@ function questionSize(text: string, compact: boolean) {
   return n < 60 ? "text-[5vw]" : n < 110 ? "text-[4vw]" : "text-[3.2vw]";
 }
 
+/** Question text; with a headline (field or "headline + blank line") the headline is big and the body smaller below it. */
+function QuestionText({ text, headline, compact }: { text: string; headline: unknown; compact: boolean }) {
+  const t = splitHeadline(text, headline);
+  if (!t.headline)
+    return <h1 className={`text-center font-display font-semibold leading-[1.08] text-cream ${questionSize(text, compact)}`}>{text}</h1>;
+  const n = t.body.length;
+  const bodySize = compact
+    ? n < 160 ? "text-[min(2.2vw,3.6vh)]" : n < 320 ? "text-[min(1.9vw,3.1vh)]" : "text-[min(1.6vw,2.6vh)]"
+    : n < 160 ? "text-[min(2.8vw,4.4vh)]" : n < 320 ? "text-[min(2.4vw,3.8vh)]" : "text-[min(2vw,3.2vh)]";
+  return (
+    <div className="mx-auto flex max-w-[80vw] flex-col items-center gap-[2vh] text-center">
+      <h1 className={`font-display font-bold leading-[1.05] text-cream ${compact ? "text-[min(3.6vw,6vh)]" : "text-[min(5vw,8vh)]"}`}>{t.headline}</h1>
+      <div className="hairline w-[22vw]" />
+      <p className={`max-w-[68vw] whitespace-pre-line leading-snug text-cream/80 ${bodySize}`}>{t.body}</p>
+    </div>
+  );
+}
+
+/** Small text above the reveal: just the headline when there is one. */
+function RevealQuestionText({ text, headline }: { text: string; headline: unknown }) {
+  const t = splitHeadline(text, headline);
+  return (
+    <p className="mb-[1vh] max-w-[88vw] self-center text-center font-display text-[2.4vw] leading-tight text-cream/85">
+      {t.headline ? <span className="font-bold">{t.headline}</span> : text}
+    </p>
+  );
+}
+
+/** Font size (em base) of a review card, by text length. */
+function reviewSize(text: string, compact: boolean) {
+  const n = text.length;
+  if (compact) return n < 120 ? "min(2.2vw,3.6vh)" : n < 260 ? "min(1.8vw,3vh)" : "min(1.5vw,2.5vh)";
+  return n < 120 ? "min(2.8vw,4.4vh)" : n < 260 ? "min(2.3vw,3.6vh)" : "min(1.8vw,2.9vh)";
+}
+
 function RoundIntro({ state, teams, origin, showJoin }: { state: GameState; teams: Team[]; origin: string; showJoin: boolean }) {
   return (
     <Centered>
@@ -324,7 +366,11 @@ function QuestionView({ state, audioPlaying }: { state: GameState; audioPlaying:
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-[4vh] px-[6vw] pb-[4vh] text-center">
       {countryOf(q.payload) && <CountryBanner code={countryOf(q.payload)!} size="lg" />}
-      <h1 className={`font-display font-semibold leading-[1.08] text-cream ${questionSize(q.text, state.media_type !== "none")}`}>{q.text}</h1>
+      {asReview(q.payload.review) ? (
+        <ReviewCard review={asReview(q.payload.review)!} text={q.text} fontSize={reviewSize(q.text, state.media_type !== "none")} />
+      ) : (
+        <QuestionText text={q.text} headline={q.payload.headline} compact={state.media_type !== "none"} />
+      )}
       <Media state={state} audioPlaying={audioPlaying} compact={false} />
       {Extra && <Extra q={q} compact={false} />}
     </div>
@@ -373,6 +419,7 @@ function CountdownView({
   const ui = REGISTRY[q.answerType];
   const Extra = ui.DisplayQuestion;
   const hasMedia = state.media_type !== "none" && !!state.media_url;
+  const review = asReview(q.payload.review);
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       {countryOf(q.payload) && (
@@ -380,8 +427,13 @@ function CountdownView({
           <CountryBanner code={countryOf(q.payload)!} size="md" />
         </div>
       )}
-      <h1 className={`px-[6vw] pt-[2vh] text-center font-display font-semibold leading-[1.1] text-cream ${questionSize(q.text, true)}`}>{q.text}</h1>
-      <div className="flex min-h-0 flex-1 items-center justify-center gap-[6vw]">
+      {review ? null : (
+        <div className="px-[6vw] pt-[2vh]">
+          <QuestionText text={q.text} headline={q.payload.headline} compact />
+        </div>
+      )}
+      <div className={`flex min-h-0 flex-1 items-center justify-center ${review ? "gap-[4vw] px-[4vw] pt-[2vh]" : "gap-[6vw]"}`}>
+        {review && <ReviewCard review={review} text={q.text} fontSize={reviewSize(q.text, true)} className="max-w-[56vw]" />}
         {hasMedia && <Media state={state} audioPlaying={audioPlaying} compact />}
         <TimerRing endsAt={state.timer_ends_at} totalSeconds={state.timer_seconds} size={hasMedia ? "40vmin" : "46vmin"} sound={sound} label="sekunder" />
       </div>

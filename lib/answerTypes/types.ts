@@ -1,4 +1,5 @@
 // Shared types for the answer-type registry. Pure (no React) – importable from tests (node --test).
+import type { ReviewInfo } from "../review.ts";
 
 export type AnswerTypeId = "draw" | "geo" | "true-false";
 export const ANSWER_TYPES: AnswerTypeId[] = ["draw", "geo", "true-false"];
@@ -37,6 +38,10 @@ export interface Question {
   explanation: string | null;
   /** Optional country the question is about (ISO alpha-2, e.g. "SG") – shown with its flag. */
   country: string | null;
+  /** Shown as a Google/Tripadvisor-style review card (round.reviewStyle). */
+  review: ReviewInfo | null;
+  /** Optional headline shown above the text (e.g. a news headline). */
+  headline: string | null;
   /** Other quiz.json fields (mapStart …) */
   extra: Record<string, unknown>;
   // ── round settings ──

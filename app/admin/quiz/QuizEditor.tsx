@@ -6,6 +6,7 @@ import { Wordmark } from "@/components/Brand";
 import { Flag } from "@/components/Flag";
 import { parseCoordinates } from "@/lib/answerTypes/geo/coords";
 import { countryList, countryName } from "@/lib/countries";
+import { detectHeadline } from "@/lib/headline";
 import { WORLD, type MapView } from "@/lib/answerTypes/geo/view";
 import { getSupabase } from "@/lib/supabase/browser";
 import { createMediaUpload, saveQuiz } from "../actions";
@@ -48,6 +49,7 @@ interface RawRound {
   pointsByRank?: number[];
   pointsCorrect?: number;
   manualPoints?: number[];
+  reviewStyle?: "google" | "tripadvisor";
   questions: RawQuestion[];
   [extra: string]: unknown;
 }
@@ -388,6 +390,17 @@ function RoundSettings({ round, onChange, onDelete }: { round: RawRound; onChang
                 <input className={input} defaultValue={(round.manualPoints ?? [0, 1, 2]).join(", ")} onBlur={(e) => onChange({ manualPoints: numList(e.target.value) })} />
               </Field>
             )}
+            <Field label="Vis som anmeldelse" hint="Spørgsmålsteksten vises som en anmeldelse med navn, stjerner og dato">
+              <select
+                className={input}
+                value={round.reviewStyle ?? ""}
+                onChange={(e) => onChange({ reviewStyle: (e.target.value || undefined) as RawRound["reviewStyle"] })}
+              >
+                <option value="">Nej – almindelig tekst</option>
+                <option value="google">Ja – Google-stil (gule stjerner)</option>
+                <option value="tripadvisor">Ja – Tripadvisor-stil (grønne bobler)</option>
+              </select>
+            </Field>
           </>
         )}
 
@@ -421,6 +434,60 @@ function RoundSettings({ round, onChange, onDelete }: { round: RawRound; onChang
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+function HeadlineField({ q, onChange }: { q: RawQuestion; onChange: (patch: Partial<RawQuestion>) => void }) {
+  const headline = typeof q.headline === "string" ? q.headline : "";
+  const detected = !headline ? detectHeadline(q.text) : null;
+  return (
+    <Field label="Overskrift (valgfri)" hint="Vises stort over teksten – fx avisoverskriften i “Ægte eller fake?”">
+      <input className={`${input} font-semibold`} value={headline} maxLength={200} placeholder="Fx: Due fanget af fartkamera i Tyskland" onChange={(e) => onChange({ headline: e.target.value || undefined })} />
+      {detected && (
+        <span className="flex flex-wrap items-center gap-2 text-xs text-cream/60">
+          Første linje ligner en overskrift: <b className="text-cream/90">{detected.headline}</b>
+          <button type="button" className="btn btn-ghost px-2 py-1 text-xs" onClick={() => onChange({ headline: detected.headline!, text: detected.body })}>
+            Flyt til overskrift
+          </button>
+        </span>
+      )}
+    </Field>
+  );
+}
+
+function ReviewFields({ style, q, onChange }: { style: "google" | "tripadvisor"; q: RawQuestion; onChange: (patch: Partial<RawQuestion>) => void }) {
+  const r = (q.review ?? {}) as { author?: string; rating?: number; date?: string; title?: string };
+  const set = (patch: Partial<typeof r>) => {
+    const next = Object.fromEntries(Object.entries({ ...r, ...patch }).filter(([, v]) => v !== undefined && v !== ""));
+    onChange({ review: Object.keys(next).length ? next : undefined });
+  };
+  return (
+    <div className="grid gap-3 rounded-xl bg-pine-950/40 p-3 sm:grid-cols-2 lg:grid-cols-4">
+      <Field label="Anmelder" hint="Tom = et tilfældigt navn">
+        <input className={input} value={r.author ?? ""} maxLength={80} placeholder="Fx Birthe K." onChange={(e) => set({ author: e.target.value || undefined })} />
+      </Field>
+      <Field label={style === "google" ? "Stjerner" : "Bobler"}>
+        <div className="flex gap-1 py-1">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <button
+              key={i}
+              type="button"
+              className={`text-2xl leading-none ${i <= (r.rating ?? 0) ? (style === "google" ? "text-[#fbbc04]" : "text-[#00aa6c]") : "text-cream/25"}`}
+              onClick={() => set({ rating: r.rating === i ? undefined : i })}
+              title={`${i} af 5`}
+            >
+              {style === "google" ? "★" : "●"}
+            </button>
+          ))}
+        </div>
+      </Field>
+      <Field label="Dato" hint="Fx “for 2 uger siden”. Tom = tilfældig">
+        <input className={input} value={r.date ?? ""} maxLength={80} onChange={(e) => set({ date: e.target.value || undefined })} />
+      </Field>
+      <Field label="Overskrift (valgfri)">
+        <input className={input} value={r.title ?? ""} maxLength={80} placeholder="Fx Aldrig igen!" onChange={(e) => set({ title: e.target.value || undefined })} />
+      </Field>
     </div>
   );
 }
@@ -507,9 +574,16 @@ function QuestionCard({
         </div>
       </div>
 
-      <Field label="Spørgsmål" hint={round.answerType === "draw" && round.scoring === "manual" ? "Fx anmeldelsen – slå “vis på holdskærm” til, hvis den er lang" : undefined}>
+      {!round.reviewStyle && <HeadlineField q={q} onChange={onChange} />}
+
+      <Field
+        label={round.reviewStyle ? "Anmeldelsen" : typeof q.headline === "string" && q.headline ? "Tekst (under overskriften)" : "Spørgsmål"}
+        hint={round.reviewStyle || (round.answerType === "draw" && round.scoring === "manual") ? "Selve anmeldelsen – slå “vis på holdskærm” til, hvis den er lang" : undefined}
+      >
         <textarea className={`${input} min-h-20 text-lg`} value={q.text} onChange={(e) => onChange({ text: e.target.value })} placeholder="Skriv spørgsmålet…" />
       </Field>
+
+      {round.reviewStyle && <ReviewFields style={round.reviewStyle} q={q} onChange={onChange} />}
 
       <div className="grid gap-4 md:grid-cols-2">
         <MediaField

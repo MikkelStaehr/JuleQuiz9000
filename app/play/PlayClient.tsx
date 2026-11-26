@@ -5,9 +5,12 @@ import { useSearchParams } from "next/navigation";
 import { Wordmark } from "@/components/Brand";
 import { CountryBanner } from "@/components/Flag";
 import { Confetti } from "@/components/Fun";
+import { ReviewCard } from "@/components/ReviewCard";
 import type { DrawingCanvasHandle } from "@/components/DrawingCanvas";
 import { REGISTRY } from "@/lib/answerTypes/registry";
 import { serverNow, useClockSync, useCountdown } from "@/lib/clock";
+import { splitHeadline } from "@/lib/headline";
+import { asReview } from "@/lib/review";
 import { getSupabase } from "@/lib/supabase/browser";
 import { multiplierLabel, publicQuestion, signed, teamColor, type GameState } from "@/lib/types";
 import { standings, useGame } from "@/lib/useGame";
@@ -464,8 +467,13 @@ function AnswerArea({
           <CountryBanner code={q.payload.country} size="sm" />
         </div>
       )}
-      {q.showTextOnPlay && q.text && (
-        <p className={`shrink-0 text-center font-display font-semibold leading-tight ${q.text.length > 120 ? "text-xl" : "text-2xl sm:text-3xl"}`}>{q.text}</p>
+      {q.showTextOnPlay && q.text && asReview(q.payload.review) ? (
+        <ReviewCard review={asReview(q.payload.review)!} text={q.text} fontSize={q.text.length > 160 ? "13px" : "15px"} className="shrink-0 self-center" />
+      ) : (
+        q.showTextOnPlay &&
+        q.text && (
+          <PlayQuestionText text={q.text} headline={q.payload.headline} />
+        )
       )}
       <div className="relative flex min-h-0 flex-1 flex-col">
         <Input
@@ -556,6 +564,18 @@ function MiniTimer({ endsAt, total }: { endsAt: string | null; total: number | n
         <div className={`h-full rounded-full ${urgent ? "bg-alarm" : "bg-gold"}`} style={{ width: `${Math.max(0, Math.min(1, frac)) * 100}%` }} />
       </div>
       <span className={`tabular w-10 text-right text-2xl font-bold ${urgent ? "animate-pulse text-[#ff8a8d]" : "text-cream"}`}>{secs}</span>
+    </div>
+  );
+}
+
+function PlayQuestionText({ text, headline }: { text: string; headline: unknown }) {
+  const t = splitHeadline(text, headline);
+  if (!t.headline)
+    return <p className={`shrink-0 text-center font-display font-semibold leading-tight ${text.length > 120 ? "text-xl" : "text-2xl sm:text-3xl"}`}>{text}</p>;
+  return (
+    <div className="shrink-0 space-y-1.5 text-center">
+      <p className="font-display text-2xl font-bold leading-tight sm:text-3xl">{t.headline}</p>
+      <p className={`whitespace-pre-line leading-snug text-cream/80 ${t.body.length > 220 ? "text-sm" : "text-base"}`}>{t.body}</p>
     </div>
   );
 }

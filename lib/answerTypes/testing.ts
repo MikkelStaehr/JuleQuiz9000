@@ -21,6 +21,8 @@ export function makeQuestion(answerType: AnswerTypeId, answer: unknown, over: Pa
     source: null,
     explanation: null,
     country: null,
+    review: null,
+    headline: null,
     extra: {},
     scoring: answerType === "draw" ? "manual" : null,
     unit: "",

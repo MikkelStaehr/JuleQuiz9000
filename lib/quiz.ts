@@ -1,6 +1,7 @@
 import "server-only";
 import { readQuizContent } from "./quizStore";
 import { DEFAULT_LABELS, META } from "./answerTypes/meta";
+import { resolveReview } from "./review";
 import {
   ANSWER_TYPES,
   DRAW_SCORINGS,
@@ -17,8 +18,10 @@ import {
  *              scoring? (draw), unit?, parts?, manualPoints?, labels? (true-false), wagerEnabled?, questions: [...] }] }
  * question: { key, text, mediaType, mediaUrl, timerSeconds?, answer, showTextOnPlay?, revealMediaUrl?, source?, ...type-specific }
  * unit / parts may also be set per question (overrides the round).
+ * question.headline: optional headline shown above the text (a text starting with "line + blank line" is split automatically).
+ * round.reviewStyle ("google" | "tripadvisor") shows the questions as review cards; question.review { author, rating, date, title }.
  */
-const COMMON = new Set(["key", "text", "mediaType", "mediaUrl", "timerSeconds", "answer", "showTextOnPlay", "revealMediaUrl", "unit", "parts", "source", "explanation", "country"]);
+const COMMON = new Set(["key", "text", "mediaType", "mediaUrl", "timerSeconds", "answer", "showTextOnPlay", "revealMediaUrl", "unit", "parts", "source", "explanation", "country", "review", "headline"]);
 
 /** An uploaded/linked media file: absolute http(s) URL or a site path like /media/x.jpg */
 export const isMediaUrl = (u: string) => /^(https?:\/\/\S+|\/\S+)$/.test(u.trim());
@@ -78,6 +81,12 @@ export function parseQuiz(input: unknown): Question[] {
         throw qfail("country skal være en landekode, fx DK eller SG");
       const parts = q.parts ?? r.parts ?? [];
       if (!isStrList(parts)) throw qfail("parts skal være en liste af tekster");
+      let review;
+      try {
+        review = resolveReview(r.reviewStyle, q.review, q.key, q.text);
+      } catch (e) {
+        throw qfail((e as Error).message);
+      }
 
       const question: Question = {
         key: q.key,
@@ -96,6 +105,8 @@ export function parseQuiz(input: unknown): Question[] {
         source: typeof q.source === "string" && q.source.trim() ? q.source.trim().slice(0, 200) : null,
         explanation: typeof q.explanation === "string" && q.explanation.trim() ? q.explanation.trim().slice(0, 800) : null,
         country: typeof q.country === "string" && /^[A-Z]{2}$/.test(q.country) ? q.country : null,
+        review,
+        headline: typeof q.headline === "string" && q.headline.trim() ? q.headline.trim().slice(0, 200) : null,
         extra: Object.fromEntries(Object.entries(q).filter(([k]) => !COMMON.has(k))),
         scoring: type === "draw" ? scoring : null,
         unit: String(q.unit ?? r.unit ?? ""),
