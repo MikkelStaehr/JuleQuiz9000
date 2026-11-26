@@ -20,7 +20,7 @@ export function Wordmark({ size = "md" }: { size?: "sm" | "md" | "xl" }) {
   return (
     <div className="flex items-center justify-center gap-[0.6em] text-gold">
       <Star className={size === "xl" ? "h-[2.4vw] w-[2.4vw]" : size === "sm" ? "h-3 w-3" : "h-5 w-5"} />
-      <span className={`font-display font-semibold uppercase leading-none ${cls}`}>UBS Christmas Quiz 2026</span>
+      <span className={`font-display font-semibold uppercase leading-none [font-variant-numeric:lining-nums] ${cls}`}>UBS Christmas Quiz 2026</span>
       <Star className={size === "xl" ? "h-[2.4vw] w-[2.4vw]" : size === "sm" ? "h-3 w-3" : "h-5 w-5"} />
     </div>
   );

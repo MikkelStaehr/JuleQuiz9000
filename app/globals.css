@@ -74,7 +74,11 @@ body {
 }
 
 .tabular {
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: lining-nums tabular-nums;
+}
+/* Cormorant defaults to old-style figures ("2o26") – use lining figures */
+.font-display {
+  font-variant-numeric: lining-nums;
 }
 
 @layer components {
