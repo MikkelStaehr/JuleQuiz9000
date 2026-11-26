@@ -99,6 +99,15 @@ export function DisplayClient() {
               totals={totals}
             />
             {state.reveal_step === facitStep(state) && <Confetti seed={`facit-${state.question_key}`} />}
+            {typeof state.reveal_payload?.explanation === "string" && state.reveal_step >= facitStep(state) && (
+              <div
+                className="fun-pop-late mt-[1.5vh] max-w-[84vw] self-center rounded-[1.4vmin] border-l-[0.8vmin] border-gold bg-pine-900/90 px-[3vmin] py-[1.6vmin] text-left shadow-[0_2vh_5vh_-2vh_rgba(0,0,0,0.7)]"
+                style={{ animationDelay: "900ms" }}
+              >
+                <p className="text-[min(1.4vw,2vh)] font-semibold uppercase tracking-[0.25em] text-gold">Forklaring</p>
+                <p className="mt-[0.6vh] text-[min(2.4vw,3.4vh)] leading-snug text-cream">{state.reveal_payload.explanation}</p>
+              </div>
+            )}
             {typeof state.reveal_payload?.source === "string" &&
               state.reveal_step >= facitStep(state) && (
               <p className="animate-fade-up mt-[1vh] self-center text-[1.2vw] text-cream/55">Kilde: {state.reveal_payload.source}</p>

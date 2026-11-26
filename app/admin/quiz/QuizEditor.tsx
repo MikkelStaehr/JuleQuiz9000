@@ -531,6 +531,16 @@ function QuestionCard({
 
       <CountryField value={typeof q.country === "string" ? q.country : null} onChange={(c) => onChange({ country: c ?? undefined })} />
 
+      <Field label="Forklaring (valgfri)" hint="Vises under facit på storskærmen og holdenes skærme – fx loven bag svaret">
+        <textarea
+          className={`${input} min-h-16`}
+          value={typeof q.explanation === "string" ? q.explanation : ""}
+          maxLength={800}
+          placeholder="Fx: Ifølge færdselsloven skal cykler have lys tændt i mørke – bøden er 700 kr."
+          onChange={(e) => onChange({ explanation: e.target.value || undefined })}
+        />
+      </Field>
+
       <Field label="Kilde (valgfri)" hint="Vises under facit på storskærmen, fx “Danmarks Statistik, 2025”">
         <input className={input} value={typeof q.source === "string" ? q.source : ""} maxLength={200} onChange={(e) => onChange({ source: e.target.value || undefined })} />
       </Field>

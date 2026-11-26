@@ -115,7 +115,13 @@ export function AdminPanel({ quiz, initialGame, teamCodes }: { quiz: Question[];
     const last = autoStep >= autoSteps;
     // the last step ALWAYS moves on to the standings; the toggle only decides whether earlier steps advance by themselves
     if (!autoReveal && !last) return;
-    const delay = last ? AUTO_MS.last : q.answerType === "draw" && autoStep >= 2 && autoStep <= autoDrawCount + 1 ? AUTO_MS.drawing : AUTO_MS.step;
+    // the last step gets extra reading time for an explanation (≈ 55 ms per character, max 20 s in total)
+    const readMs = q.explanation ? Math.min(14_000, q.explanation.length * 55) : 0;
+    const delay = last
+      ? AUTO_MS.last + readMs
+      : q.answerType === "draw" && autoStep >= 2 && autoStep <= autoDrawCount + 1
+        ? AUTO_MS.drawing
+        : AUTO_MS.step;
     const id = setTimeout(() => {
       if (last) A.showScoreboard(gameId, qKey);
       else A.advanceReveal(gameId, autoStep);
@@ -261,6 +267,7 @@ export function AdminPanel({ quiz, initialGame, teamCodes }: { quiz: Question[];
                   <div className="rounded-xl border border-gold/40 bg-gold/10 px-4 py-3">
                     <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-gold">Facit · kun quizmaster</p>
                     <p className="mt-1 text-xl font-semibold text-gold-soft">{META[q.answerType].answerText(q)}</p>
+                    {q.explanation && <p className="mt-2 text-sm leading-snug text-cream/80">{q.explanation}</p>}
                     {q.source && <p className="mt-1 text-xs text-cream/50">Kilde: {q.source}</p>}
                   </div>
                   <p className="text-xs text-cream/50">

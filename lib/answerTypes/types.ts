@@ -33,6 +33,8 @@ export interface Question {
   revealMediaUrl: string | null;
   /** Optional source for the facit (e.g. "Danmarks Statistik, 2025") – shown at reveal. */
   source: string | null;
+  /** Optional explanation of the facit (e.g. the law behind it) – shown at reveal. */
+  explanation: string | null;
   /** Optional country the question is about (ISO alpha-2, e.g. "SG") – shown with its flag. */
   country: string | null;
   /** Other quiz.json fields (mapStart …) */

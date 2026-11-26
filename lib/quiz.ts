@@ -18,7 +18,7 @@ import {
  * question: { key, text, mediaType, mediaUrl, timerSeconds?, answer, showTextOnPlay?, revealMediaUrl?, source?, ...type-specific }
  * unit / parts may also be set per question (overrides the round).
  */
-const COMMON = new Set(["key", "text", "mediaType", "mediaUrl", "timerSeconds", "answer", "showTextOnPlay", "revealMediaUrl", "unit", "parts", "source", "country"]);
+const COMMON = new Set(["key", "text", "mediaType", "mediaUrl", "timerSeconds", "answer", "showTextOnPlay", "revealMediaUrl", "unit", "parts", "source", "explanation", "country"]);
 
 /** An uploaded/linked media file: absolute http(s) URL or a site path like /media/x.jpg */
 export const isMediaUrl = (u: string) => /^(https?:\/\/\S+|\/\S+)$/.test(u.trim());
@@ -94,6 +94,7 @@ export function parseQuiz(input: unknown): Question[] {
         showTextOnPlay: q.showTextOnPlay === true,
         revealMediaUrl: (q.revealMediaUrl as string | null | undefined) ?? null,
         source: typeof q.source === "string" && q.source.trim() ? q.source.trim().slice(0, 200) : null,
+        explanation: typeof q.explanation === "string" && q.explanation.trim() ? q.explanation.trim().slice(0, 800) : null,
         country: typeof q.country === "string" && /^[A-Z]{2}$/.test(q.country) ? q.country : null,
         extra: Object.fromEntries(Object.entries(q).filter(([k]) => !COMMON.has(k))),
         scoring: type === "draw" ? scoring : null,

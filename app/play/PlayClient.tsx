@@ -223,6 +223,11 @@ function TeamScreen({ session, onLeave }: { session: Session; onLeave: () => voi
         <Center>
           <p className="text-xs font-semibold uppercase tracking-[0.3em] text-gold">Facit</p>
           <p className="font-display text-4xl font-semibold">{state.answer_text}</p>
+          {typeof state.reveal_payload?.explanation === "string" && (
+            <p className="mt-2 max-w-md rounded-xl bg-pine-900/80 px-4 py-3 text-left text-sm leading-snug text-cream/90 ring-1 ring-gold/20">
+              {state.reveal_payload.explanation}
+            </p>
+          )}
           {typeof state.reveal_payload?.source === "string" && <p className="text-xs text-cream/50">Kilde: {state.reveal_payload.source}</p>}
           {myScore ? (
             <p className={`animate-pop mt-4 text-3xl font-bold ${myScore.points < 0 ? "fun-nope text-[#ff8a8d]" : "text-gold"}`}>{signed(myScore.points)} point</p>

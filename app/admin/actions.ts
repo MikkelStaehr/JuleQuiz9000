@@ -311,6 +311,7 @@ export async function reveal(gameId: string): Promise<Result> {
       reveal_payload: {
         ...META[q.answerType].revealPayload(q),
         source: q.source,
+        explanation: q.explanation,
         ...(q.answerType === "draw" ? { drawCount: await countDrawings(gameId, q.key) } : {}),
       },
       media_command: "stop",
